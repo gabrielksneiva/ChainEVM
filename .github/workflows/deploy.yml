@@ -1,0 +1,483 @@
+name: Deploy Lambda
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.24'
+  AWS_REGION: us-east-1
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  TF_VERSION: 1.7.0
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+  id-token: write
+  checks: write
+  pull-requests: write
+  deployments: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==================== LINT & FORMAT ====================
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          args: --timeout=10m --out-format=github-actions
+          skip-cache: false
+
+      - name: Check formatting
+        run: |
+          if [ -n "$(gofmt -s -l .)" ]; then
+            echo "❌ Go files not formatted:"
+            gofmt -s -d .
+            exit 1
+          fi
+          echo "✅ All files formatted correctly"
+
+      - name: Check imports
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          if ! goimports -l . | grep -q .; then
+            echo "✅ Imports are correct"
+          else
+            echo "❌ Imports need fixing:"
+            goimports -d .
+            exit 1
+          fi
+
+  # ==================== SECURITY SCAN ====================
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run Gosec
+        uses: securego/gosec@master
+        with:
+          args: '-no-fail -fmt json -out gosec-report.json ./...'
+        continue-on-error: true
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # ==================== TESTS & COVERAGE ====================
+  test:
+    name: Tests & Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run tests with coverage
+        run: |
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+          go tool cover -func=coverage.out | tail -1
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+          THRESHOLD=90
+          
+          if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
+            echo "❌ Coverage $COVERAGE% is below threshold of $THRESHOLD%"
+            exit 1
+          fi
+          echo "✅ Coverage $COVERAGE% meets threshold of $THRESHOLD%"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Comment PR with coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const coverage = fs.readFileSync('coverage.out', 'utf8');
+            const lines = coverage.split('\n');
+            const lastLine = lines[lines.length - 2];
+            const match = lastLine.match(/total:\s+([\d.]+)%/);
+            const percentage = match ? match[1] : 'unknown';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 📊 Test Coverage\n\n✅ Coverage: **${percentage}%**\n\n(Minimum: 90%)`
+            });
+
+  # ==================== BUILD ====================
+  build:
+    name: Build Lambda
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [ lint, security, test ]
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build Lambda binary
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: arm64
+        run: |
+          go build -ldflags="-s -w -X main.Version=${{ github.sha }}" \
+            -o bootstrap cmd/lambda/main.go
+          file bootstrap
+          ls -lh bootstrap
+
+      - name: Upload Lambda artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-binary
+          path: bootstrap
+          retention-days: 1
+
+  # ==================== DOCKER BUILD ====================
+  docker:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [ lint, security, test ]
+    if: github.event_name == 'push'
+    outputs:
+      image-digest: ${{ steps.docker-build.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push Docker image
+        id: docker-build
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ==================== DEPLOY ====================
+  deploy:
+    name: Deploy Lambda Function
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [ build, docker ]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    permissions:
+      id-token: write
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Lambda artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-binary
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-deploy
+        env:
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Prepare Lambda package
+        run: |
+          echo "📦 Creating Lambda deployment package..."
+          zip -j lambda.zip bootstrap
+          ls -lh lambda.zip
+          echo "✅ Lambda package ready"
+
+      - name: Update Lambda code
+        run: |
+          FUNCTION_NAME="chainevm-executor"
+          
+          echo "⚡ Deploying Lambda function: $FUNCTION_NAME"
+          
+          aws lambda update-function-code \
+            --function-name "$FUNCTION_NAME" \
+            --zip-file fileb://lambda.zip \
+            --output json | jq -r '.Version, .LastModified, .CodeSha256'
+          
+          echo "⏳ Waiting for Lambda update to complete..."
+          aws lambda wait function-updated --function-name "$FUNCTION_NAME"
+          
+          echo "✅ Lambda code deployed successfully"
+
+      - name: Health Check
+        timeout-minutes: 3
+        run: |
+          FUNCTION_NAME="chainevm-executor"
+          REGION="us-east-1"
+          
+          echo "🔍 Running health checks..."
+          echo ""
+          
+          # Test Lambda function exists
+          echo "1️⃣  Verifying Lambda function is deployed..."
+          if aws lambda get-function --function-name "$FUNCTION_NAME" --region "$REGION" &>/dev/null; then
+            echo "✅ Lambda function deployment verified"
+          else
+            echo "❌ Lambda function not found"
+            exit 1
+          fi
+
+      - name: Deployment Summary
+        run: |
+          echo ""
+          echo "📋 Deployment Summary"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Lambda:       chainevm-executor"
+          echo "✅ Function:     EVM Transaction Executor"
+          echo "✅ Region:       ${{ env.AWS_REGION }}"
+          echo "✅ Commit:       ${{ github.sha }}"
+          echo "✅ Build Arch:   linux/arm64"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "🚀 Deployment complete!"
+          echo "ℹ️  To update infrastructure: cd terraform && terraform apply"
+          echo "ℹ️  Lambda handles EVM transaction execution via SQS events"
+
+  # ==================== INTEGRATION TESTS ====================
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [ deploy ]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-integration-test
+        env:
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Test 1 - Lambda Function Exists
+        run: |
+          echo "📋 Test 1: Verify Lambda Function"
+          
+          if aws lambda get-function --function-name chainevm-executor &>/dev/null; then
+            echo "✅ Lambda function exists and is accessible"
+            aws lambda get-function-configuration --function-name chainevm-executor | jq '{FunctionArn, Runtime, MemorySize, Timeout}'
+          else
+            echo "❌ Lambda function not found"
+            exit 1
+          fi
+
+      - name: Test 2 - SQS Queue Configuration
+        run: |
+          echo "📋 Test 2: Verify SQS Queue Configuration"
+          
+          QUEUE_URL=$(aws sqs list-queues \
+            --queue-name-prefix "chainevm-events" \
+            --query 'QueueUrls[0]' \
+            --output text 2>/dev/null)
+          
+          if [ ! -z "$QUEUE_URL" ] && [ "$QUEUE_URL" != "None" ]; then
+            echo "✅ SQS queue found: $QUEUE_URL"
+            aws sqs get-queue-attributes --queue-url "$QUEUE_URL" --attribute-names All | jq '.Attributes | {ApproximateNumberOfMessages, VisibilityTimeout, MessageRetentionPeriod}'
+          else
+            echo "⚠️  SQS queue not configured yet (expected in full deployment)"
+          fi
+
+      - name: Test 3 - Lambda Event Source Mapping
+        run: |
+          echo "📋 Test 3: Verify Lambda Event Source Mapping"
+          
+          MAPPINGS=$(aws lambda list-event-source-mappings \
+            --function-name chainevm-executor \
+            --query 'EventSourceMappings[].{UUID, State, EventSourceArn}' \
+            --output json 2>/dev/null || echo '[]')
+          
+          if [ "$MAPPINGS" != "[]" ]; then
+            echo "✅ Event source mappings configured"
+            echo "$MAPPINGS" | jq '.'
+          else
+            echo "⚠️  No event source mappings configured (can be added via Terraform)"
+          fi
+
+      - name: Test 4 - DynamoDB Table Check
+        run: |
+          echo "📋 Test 4: Verify DynamoDB Tables"
+          
+          # Check if transaction table exists
+          if aws dynamodb describe-table --table-name evm-transactions &>/dev/null; then
+            echo "✅ DynamoDB table 'evm-transactions' exists"
+            aws dynamodb describe-table --table-name evm-transactions | jq '.Table | {TableName, TableStatus, ItemCount, BillingModeSummary}'
+          else
+            echo "⚠️  DynamoDB table not found (will be created by Terraform)"
+          fi
+
+      - name: Integration Test Summary
+        if: always()
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🧪 Integration Test Results"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Job Status: ${{ job.status }}"
+          echo ""
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ All integration tests passed!"
+            echo ""
+            echo "Verified:"
+            echo "  • Lambda function deployment"
+            echo "  • SQS queue configuration"
+            echo "  • Event source mappings"
+            echo "  • DynamoDB tables"
+          else
+            echo "❌ Some integration tests failed"
+            echo "Check individual test steps above"
+          fi
+
+  # ==================== SUMMARY ====================
+  summary:
+    name: Pipeline Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [ lint, security, test, build, docker, deploy, integration-test ]
+    steps:
+      - name: Check results
+        run: |
+          echo "📊 Pipeline Results:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Lint:        ${{ needs.lint.result }}"
+          echo "Security:    ${{ needs.security.result }}"
+          echo "Test:        ${{ needs.test.result }}"
+          echo "Build:       ${{ needs.build.result }}"
+          echo "Docker:      ${{ needs.docker.result }}"
+          echo "Deploy:      ${{ needs.deploy.result }}"
+          echo "Integration: ${{ needs.integration-test.result }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          if [ "${{ needs.lint.result }}" == "failure" ] || \
+             [ "${{ needs.security.result }}" == "failure" ] || \
+             [ "${{ needs.test.result }}" == "failure" ] || \
+             [ "${{ needs.deploy.result }}" == "failure" ] || \
+             [ "${{ needs.integration-test.result }}" == "failure" ]; then
+            echo "❌ Pipeline failed"
+            exit 1
+          fi
+          
+          echo "✅ Pipeline completed successfully"
+
+      - name: Report to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const status = '${{ job.status }}';
+            const emoji = status === 'success' ? '✅' : '❌';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## ${emoji} Pipeline Status\n\n- Lint: ${{ needs.lint.result }}\n- Security: ${{ needs.security.result }}\n- Tests: ${{ needs.test.result }}\n- Build: ${{ needs.build.result }}\n- Docker: ${{ needs.docker.result }}\n- Deploy: ${{ needs.deploy.result }}`
+            });

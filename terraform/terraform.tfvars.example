@@ -1,0 +1,31 @@
+# AWS Configuration
+aws_region = "us-east-1"
+environment = "production"
+
+# Lambda Configuration
+lambda_function_name = "ChainEVM"
+lambda_runtime = "provided.al2"
+lambda_timeout = 60
+lambda_memory_size = 512
+lambda_file_path = "../lambda-deployment.zip"
+
+# SQS Configuration
+sqs_queue_name = "chainorchestrator-evm-queue-production"
+sqs_visibility_timeout = 300
+sqs_retention_period = 1209600  # 14 days
+
+# DynamoDB Configuration
+dynamodb_table_name = "evm-transactions"
+dynamodb_ttl_attribute = "ttl"
+
+# RPC URLs (get these from providers like Alchemy, Infura, etc.)
+rpc_url_ethereum = "https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY_HERE"
+rpc_url_polygon = "https://polygon-mainnet.g.alchemy.com/v2/YOUR_KEY_HERE"
+rpc_url_bsc = "https://bsc-mainnet.infura.io/v3/YOUR_KEY_HERE"
+rpc_url_arbitrum = "https://arb-mainnet.g.alchemy.com/v2/YOUR_KEY_HERE"
+rpc_url_optimism = "https://opt-mainnet.g.alchemy.com/v2/YOUR_KEY_HERE"
+rpc_url_avalanche = "https://avax-mainnet.g.alchemy.com/v2/YOUR_KEY_HERE"
+
+# Timeouts
+rpc_timeout_seconds = 10
+required_confirmations = 12

@@ -1,0 +1,49 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+!terraform/terraform.tfvars.example
+*.tfplan
+
+# Build
+bootstrap
+lambda-deployment.zip
+dist/
+build/
+
+# Go
+bin/
+vendor/
+*.exe
+*.so
+*.dll
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AWS
+aws-cli-local/
+.aws/
+
+# Logs
+*.log
+logs/
+
+# Coverage
+*.coverprofile
+coverage/
