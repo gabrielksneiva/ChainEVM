@@ -8,14 +8,13 @@ terraform {
     }
   }
 
-  # Uncomment para usar S3 backend:
-  # backend "s3" {
-  #   bucket         = "your-terraform-state-bucket"
-  #   key            = "chainevm/terraform.tfstate"
-  #   region         = "us-east-1"
-  #   encrypt        = true
-  #   dynamodb_table = "terraform-locks"
-  # }
+  backend "s3" {
+    bucket         = "chainevm-terraform-state"
+    key            = "evm/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "terraform-state-lock"
+  }
 }
 
 provider "aws" {
