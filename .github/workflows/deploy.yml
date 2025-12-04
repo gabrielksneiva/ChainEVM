@@ -293,7 +293,12 @@ jobs:
 
       - name: Update Lambda code
         run: |
-          FUNCTION_NAME="chainevm-executor"
+          # Determinar nome da função baseado na branch
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            FUNCTION_NAME="chainevm-executor-prod"
+          else
+            FUNCTION_NAME="chainevm-executor-dev"
+          fi
           
           echo "⚡ Deploying Lambda function: $FUNCTION_NAME"
           
@@ -310,7 +315,12 @@ jobs:
       - name: Health Check
         timeout-minutes: 3
         run: |
-          FUNCTION_NAME="chainevm-executor"
+          # Determinar nome da função baseado na branch
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            FUNCTION_NAME="chainevm-executor-prod"
+          else
+            FUNCTION_NAME="chainevm-executor-dev"
+          fi
           REGION="us-east-1"
           
           echo "🔍 Running health checks..."

@@ -80,7 +80,6 @@ resource "aws_lambda_function" "evm_executor" {
   environment {
     variables = {
       ENVIRONMENT            = var.environment
-      AWS_REGION             = var.aws_region
       DYNAMODB_TABLE_NAME    = aws_dynamodb_table.transactions.name
       SQS_QUEUE_URL          = data.aws_sqs_queue.evm_queue.url
       RPC_URL_ETHEREUM       = var.rpc_url_ethereum

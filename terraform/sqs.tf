@@ -1,9 +1,9 @@
-# Data source para a fila SQS existente
+# Data source para a fila SQS existente (criada pelo chainorchestrator)
 data "aws_sqs_queue" "evm_queue" {
   name = var.sqs_queue_name
 }
 
-# Data source para a DLQ existente
+# Data source para a DLQ existente (criada pelo chainorchestrator)
 data "aws_sqs_queue" "evm_dlq" {
   name = var.sqs_dlq_name
 }
