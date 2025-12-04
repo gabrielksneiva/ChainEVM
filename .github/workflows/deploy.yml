@@ -274,9 +274,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions-deploy
-        env:
-          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: github-actions-chainevm-deploy
 
       - name: Prepare Lambda package
         run: |
@@ -354,9 +352,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions-integration-test
-        env:
-          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: github-actions-chainevm-integration-test
 
       - name: Test 1 - Lambda Function Exists
         run: |
