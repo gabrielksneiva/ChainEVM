@@ -4,12 +4,6 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "development"
-}
-
 variable "lambda_function_name" {
   description = "Lambda function name"
   type        = string
@@ -43,13 +37,13 @@ variable "lambda_file_path" {
 variable "sqs_queue_name" {
   description = "SQS queue name"
   type        = string
-  default     = "evm-queue-production"
+  default     = "evm-queue"
 }
 
 variable "sqs_dlq_name" {
   description = "SQS dead letter queue name"
   type        = string
-  default     = "evm-dlq-production"
+  default     = "evm-dlq"
 }
 
 variable "sqs_visibility_timeout" {

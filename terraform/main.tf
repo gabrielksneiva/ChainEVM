@@ -22,9 +22,8 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "ChainEVM"
-      Environment = var.environment
-      ManagedBy   = "Terraform"
+      Project   = "ChainEVM"
+      ManagedBy = "Terraform"
     }
   }
 }

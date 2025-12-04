@@ -69,7 +69,6 @@ output "deployment_summary" {
     lambda_function = aws_lambda_function.evm_executor.function_name
     sqs_queue       = data.aws_sqs_queue.evm_queue.name
     dynamodb_table  = aws_dynamodb_table.transactions.name
-    environment     = var.environment
     region          = var.aws_region
   }
 }
