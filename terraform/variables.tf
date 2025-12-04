@@ -43,13 +43,13 @@ variable "lambda_file_path" {
 variable "sqs_queue_name" {
   description = "SQS queue name"
   type        = string
-  default     = "chainorchestrator-evm-queue-production"
+  default     = "evm-queue-production"
 }
 
 variable "sqs_dlq_name" {
   description = "SQS dead letter queue name"
   type        = string
-  default     = "chainorchestrator-evm-dlq-production"
+  default     = "evm-dlq-production"
 }
 
 variable "sqs_visibility_timeout" {
