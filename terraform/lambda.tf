@@ -79,18 +79,18 @@ resource "aws_lambda_function" "evm_executor" {
 
   environment {
     variables = {
-      ENVIRONMENT            = var.environment
-      DYNAMODB_TABLE_NAME    = aws_dynamodb_table.transactions.name
-      SQS_QUEUE_URL          = data.aws_sqs_queue.evm_queue.url
-      RPC_URL_ETHEREUM       = var.rpc_url_ethereum
-      RPC_URL_POLYGON        = var.rpc_url_polygon
-      RPC_URL_BSC            = var.rpc_url_bsc
-      RPC_URL_ARBITRUM       = var.rpc_url_arbitrum
-      RPC_URL_OPTIMISM       = var.rpc_url_optimism
-      RPC_URL_AVALANCHE      = var.rpc_url_avalanche
-      RPC_TIMEOUT_SECONDS    = var.rpc_timeout_seconds
+      ENVIRONMENT             = var.environment
+      DYNAMODB_TABLE_NAME     = aws_dynamodb_table.transactions.name
+      SQS_QUEUE_URL           = data.aws_sqs_queue.evm_queue.url
+      RPC_URL_ETHEREUM        = var.rpc_url_ethereum
+      RPC_URL_POLYGON         = var.rpc_url_polygon
+      RPC_URL_BSC             = var.rpc_url_bsc
+      RPC_URL_ARBITRUM        = var.rpc_url_arbitrum
+      RPC_URL_OPTIMISM        = var.rpc_url_optimism
+      RPC_URL_AVALANCHE       = var.rpc_url_avalanche
+      RPC_TIMEOUT_SECONDS     = var.rpc_timeout_seconds
       REQUEST_TIMEOUT_SECONDS = 30
-      REQUIRED_CONFIRMATIONS = var.required_confirmations
+      REQUIRED_CONFIRMATIONS  = var.required_confirmations
     }
   }
 
@@ -103,11 +103,11 @@ resource "aws_lambda_function" "evm_executor" {
 
 # Lambda Event Source Mapping (SQS trigger)
 resource "aws_lambda_event_source_mapping" "sqs_trigger" {
-  event_source_arn  = data.aws_sqs_queue.evm_queue.arn
-  function_name     = aws_lambda_function.evm_executor.arn
-  batch_size        = 1
+  event_source_arn                   = data.aws_sqs_queue.evm_queue.arn
+  function_name                      = aws_lambda_function.evm_executor.arn
+  batch_size                         = 1
   maximum_batching_window_in_seconds = 5
-  
+
   # On error, send to DLQ
   function_response_types = ["ReportBatchItemFailures"]
 }
@@ -122,8 +122,8 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
 
 # Lambda Alias for easy versioning
 resource "aws_lambda_alias" "prod" {
-  name            = "prod"
-  description     = "Production alias"
-  function_name   = aws_lambda_function.evm_executor.function_name
+  name             = "prod"
+  description      = "Production alias"
+  function_name    = aws_lambda_function.evm_executor.function_name
   function_version = aws_lambda_function.evm_executor.version
 }

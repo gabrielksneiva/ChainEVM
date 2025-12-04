@@ -7,13 +7,13 @@ variable "aws_region" {
 variable "environment" {
   description = "Environment name"
   type        = string
-  default     = "production"
+  default     = "development"
 }
 
 variable "lambda_function_name" {
   description = "Lambda function name"
   type        = string
-  default     = "ChainEVM"
+  default     = "chainevm-executor-dev"
 }
 
 variable "lambda_runtime" {

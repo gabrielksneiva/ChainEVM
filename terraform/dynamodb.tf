@@ -1,8 +1,8 @@
 # DynamoDB Table for storing transactions
 resource "aws_dynamodb_table" "transactions" {
-  name           = var.dynamodb_table_name
-  billing_mode   = "PAY_PER_REQUEST"  # On-demand billing
-  hash_key       = "operation_id"
+  name         = var.dynamodb_table_name
+  billing_mode = "PAY_PER_REQUEST" # On-demand billing
+  hash_key     = "operation_id"
 
   attribute {
     name = "operation_id"
@@ -64,7 +64,7 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_item_count" {
   namespace           = "AWS/DynamoDB"
   period              = 300
   statistic           = "Average"
-  threshold           = 1000000  # 1 million items
+  threshold           = 1000000 # 1 million items
   alarm_description   = "Alert when table has too many items"
 
   dimensions = {
