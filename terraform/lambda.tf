@@ -75,7 +75,7 @@ resource "aws_lambda_function" "evm_executor" {
   runtime          = var.lambda_runtime
   timeout          = var.lambda_timeout
   memory_size      = var.lambda_memory_size
-  source_code_hash = filebase64sha256(var.lambda_file_path)
+  source_code_hash = fileexists(var.lambda_file_path) ? filebase64sha256(var.lambda_file_path) : ""
 
   environment {
     variables = {
