@@ -100,8 +100,7 @@ func (c *EVMRPCClient) SendTransaction(ctx context.Context, tx *types.Transactio
 
 // EstimateGas estima o gas necessário para uma transação
 func (c *EVMRPCClient) EstimateGas(ctx context.Context, msg interface{}) (uint64, error) {
-	ctx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
+	_ = ctx // Context is passed but not used for local estimation
 
 	// msg deve ser um types.CallMsg convertido
 	callMsg, ok := msg.(interface {

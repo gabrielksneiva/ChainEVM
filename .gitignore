@@ -47,3 +47,5 @@ logs/
 # Coverage
 *.coverprofile
 coverage/
+
+coverage*

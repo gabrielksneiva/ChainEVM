@@ -11,6 +11,13 @@ import (
 	"go.uber.org/zap"
 )
 
+// contextKey is a type for context keys to avoid collisions
+type contextKey string
+
+const (
+	testKeyString contextKey = "key"
+)
+
 func TestNewXRayTracerDisabled(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	tracer := NewXRayTracer(false, logger)
@@ -92,9 +99,15 @@ func TestAddAnnotationAndMetadata(t *testing.T) {
 
 	ctx := context.Background()
 
-	tracer.AddAnnotation(ctx, "key", "value")
-	tracer.AddMetadata(ctx, "key", "value")
-	tracer.AddError(ctx, nil)
+	if err := tracer.AddAnnotation(ctx, "key", "value"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := tracer.AddMetadata(ctx, "key", "value"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := tracer.AddError(ctx, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestGetTraceID(t *testing.T) {
@@ -123,10 +136,18 @@ func TestAddAnnotationWithDifferentTypes(t *testing.T) {
 
 	ctx := context.Background()
 
-	tracer.AddAnnotation(ctx, "string_key", "string_value")
-	tracer.AddAnnotation(ctx, "int_key", 42)
-	tracer.AddAnnotation(ctx, "bool_key", true)
-	tracer.AddAnnotation(ctx, "float_key", 3.14)
+	if err := tracer.AddAnnotation(ctx, "string_key", "string_value"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := tracer.AddAnnotation(ctx, "int_key", 42); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := tracer.AddAnnotation(ctx, "bool_key", true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := tracer.AddAnnotation(ctx, "float_key", 3.14); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestAddMetadataWithDifferentTypes(t *testing.T) {
@@ -135,10 +156,14 @@ func TestAddMetadataWithDifferentTypes(t *testing.T) {
 
 	ctx := context.Background()
 
-	tracer.AddMetadata(ctx, "metadata_string", "value")
-	tracer.AddMetadata(ctx, "metadata_map", map[string]interface{}{
+	if err := tracer.AddMetadata(ctx, "metadata_string", "value"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := tracer.AddMetadata(ctx, "metadata_map", map[string]interface{}{
 		"nested": "value",
-	})
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestAddErrorWithNil(t *testing.T) {
@@ -147,7 +172,9 @@ func TestAddErrorWithNil(t *testing.T) {
 
 	ctx := context.Background()
 
-	tracer.AddError(ctx, nil)
+	if err := tracer.AddError(ctx, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestCaptureCallContextPropagation(t *testing.T) {
@@ -173,7 +200,9 @@ func TestAddErrorWithValue(t *testing.T) {
 	ctx := context.Background()
 	err := assert.AnError
 
-	tracer.AddError(ctx, err)
+	if addErr := tracer.AddError(ctx, err); addErr != nil {
+		t.Fatalf("unexpected error: %v", addErr)
+	}
 }
 
 func TestStartSegmentDisabled(t *testing.T) {
@@ -181,9 +210,8 @@ func TestStartSegmentDisabled(t *testing.T) {
 	tracer := NewXRayTracer(false, logger)
 
 	ctx := context.Background()
-	end := func() {}
 
-	ctx, end = tracer.StartSegment(ctx, "test")
+	_, end := tracer.StartSegment(ctx, "test")
 	assert.NotNil(t, end)
 }
 
@@ -195,10 +223,12 @@ func TestCaptureCallMultiple(t *testing.T) {
 	count := 0
 
 	for i := 0; i < 3; i++ {
-		tracer.CaptureCall(ctx, "call-"+string(rune(48+i)), func(c context.Context) error {
+		if err := tracer.CaptureCall(ctx, "call-"+string(rune(48+i)), func(c context.Context) error {
 			count++
 			return nil
-		})
+		}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	}
 
 	assert.Equal(t, 3, count)
@@ -212,10 +242,18 @@ func TestAddAnnotationMultipleTypes(t *testing.T) {
 	_, end := tracer.StartSegment(ctx, "test-annot")
 
 	// Test annotations don't panic
-	tracer.AddAnnotation(ctx, "string_key", "value")
-	tracer.AddAnnotation(ctx, "int_key", 42)
-	tracer.AddAnnotation(ctx, "bool_key", true)
-	tracer.AddAnnotation(ctx, "float_key", 3.14)
+	if err := tracer.AddAnnotation(ctx, "string_key", "value"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := tracer.AddAnnotation(ctx, "int_key", 42); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := tracer.AddAnnotation(ctx, "bool_key", true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := tracer.AddAnnotation(ctx, "float_key", 3.14); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	end()
 }
@@ -237,7 +275,9 @@ func TestAddMetadataMultipleKeys(t *testing.T) {
 	}
 
 	for key, value := range metadata {
-		tracer.AddMetadata(ctx, key, value)
+		if err := tracer.AddMetadata(ctx, key, value); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	}
 
 	end()
@@ -283,10 +323,10 @@ func TestCaptureCallContextPreservation(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	tracer := NewXRayTracer(false, logger)
 
-	originalCtx := context.WithValue(context.Background(), "key", "value")
+	originalCtx := context.WithValue(context.Background(), testKeyString, "value")
 
 	err := tracer.CaptureCall(originalCtx, "preserve-call", func(c context.Context) error {
-		assert.Equal(t, "value", c.Value("key"))
+		assert.Equal(t, "value", c.Value(testKeyString))
 		return nil
 	})
 
@@ -316,7 +356,9 @@ func TestTracerWithMultipleSegments(t *testing.T) {
 	ctx2, end2 := tracer.StartSegment(ctx1, "seg2")
 	ctx3, end3 := tracer.StartSegment(ctx2, "seg3")
 
-	tracer.AddAnnotation(ctx3, "depth", 3)
+	if err := tracer.AddAnnotation(ctx3, "depth", 3); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	end3()
 	end2()
@@ -341,16 +383,24 @@ func TestSegmentOperationsSequence(t *testing.T) {
 
 	// Sequence of operations
 	ctx1, end1 := tracer.StartSegment(ctx, "operation1")
-	tracer.AddAnnotation(ctx1, "step", 1)
-	tracer.AddMetadata(ctx1, "metadata", map[string]interface{}{"key": "value"})
+	if err := tracer.AddAnnotation(ctx1, "step", 1); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := tracer.AddMetadata(ctx1, "metadata", map[string]interface{}{"key": "value"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	end1()
 
 	ctx2, end2 := tracer.StartSegment(ctx, "operation2")
-	tracer.AddAnnotation(ctx2, "step", 2)
+	if err := tracer.AddAnnotation(ctx2, "step", 2); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	end2()
 
 	ctx3, end3 := tracer.StartSegment(ctx, "operation3")
-	tracer.AddAnnotation(ctx3, "step", 3)
+	if err := tracer.AddAnnotation(ctx3, "step", 3); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	end3()
 }
 
@@ -383,10 +433,22 @@ func TestTracerAnnotationEdgeCases(t *testing.T) {
 	_, end := tracer.StartSegment(ctx, "test")
 
 	// Add various annotation types
-	tracer.AddAnnotation(ctx, "nil_value", nil)
-	tracer.AddAnnotation(ctx, "empty_string", "")
-	tracer.AddAnnotation(ctx, "zero_int", 0)
-	tracer.AddAnnotation(ctx, "false_bool", false)
+	err := tracer.AddAnnotation(ctx, "nil_value", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	err = tracer.AddAnnotation(ctx, "empty_string", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	err = tracer.AddAnnotation(ctx, "zero_int", 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	err = tracer.AddAnnotation(ctx, "false_bool", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	end()
 }
@@ -402,7 +464,7 @@ func TestTracerWithDifferentContexts(t *testing.T) {
 	})
 
 	t.Run("with value context", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), "key", "value")
+		ctx := context.WithValue(context.Background(), testKeyString, "value")
 		_, end := tracer.StartSegment(ctx, "value-segment")
 		end()
 	})
@@ -424,8 +486,15 @@ func TestAddAnnotationWhenEnabled(t *testing.T) {
 	_, end := tracer.StartSegment(ctx, "test-segment")
 
 	// These should work without panicking when enabled
-	tracer.AddAnnotation(ctx, "test_key", "test_value")
-	tracer.AddAnnotation(ctx, "number", 42)
+	err := tracer.AddAnnotation(ctx, "test_key", "test_value")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	err = tracer.AddAnnotation(ctx, "number", 42)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	end()
 }
@@ -437,8 +506,15 @@ func TestAddMetadataWhenEnabled(t *testing.T) {
 	ctx := context.Background()
 	_, end := tracer.StartSegment(ctx, "test-segment")
 
-	tracer.AddMetadata(ctx, "test_key", "test_value")
-	tracer.AddMetadata(ctx, "complex", map[string]interface{}{"nested": "value"})
+	err := tracer.AddMetadata(ctx, "test_key", "test_value")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	err = tracer.AddMetadata(ctx, "complex", map[string]interface{}{"nested": "value"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	end()
 }
@@ -450,8 +526,12 @@ func TestAddErrorWhenEnabled(t *testing.T) {
 	ctx := context.Background()
 	_, end := tracer.StartSegment(ctx, "test-segment")
 
-	tracer.AddError(ctx, fmt.Errorf("test error"))
-	tracer.AddError(ctx, nil)
+	if err := tracer.AddError(ctx, fmt.Errorf("test error")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := tracer.AddError(ctx, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	end()
 }

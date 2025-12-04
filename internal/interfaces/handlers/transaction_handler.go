@@ -6,21 +6,25 @@ import (
 	"net/http"
 
 	"github.com/gabrielksneiva/ChainEVM/internal/application/dtos"
-	"github.com/gabrielksneiva/ChainEVM/internal/application/usecases"
 	pkgconfig "github.com/gabrielksneiva/ChainEVM/pkg/config"
 	"go.uber.org/zap"
 )
 
+// ExecuteTransactionUseCase interface for the use case
+type ExecuteTransactionUseCase interface {
+	Execute(ctx context.Context, req *dtos.ExecuteTransactionRequest) (*dtos.ExecuteTransactionResponse, error)
+}
+
 // TransactionHandler gerencia requisições de transações
 type TransactionHandler struct {
-	executeUseCase *usecases.ExecuteEVMTransactionUseCase
+	executeUseCase ExecuteTransactionUseCase
 	config         *pkgconfig.Config
 	logger         *zap.Logger
 }
 
 // NewTransactionHandler cria um novo handler de transações
 func NewTransactionHandler(
-	executeUseCase *usecases.ExecuteEVMTransactionUseCase,
+	executeUseCase ExecuteTransactionUseCase,
 	config *pkgconfig.Config,
 	logger *zap.Logger,
 ) *TransactionHandler {

@@ -10,6 +10,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// contextKey for error middleware tests
+type errorContextKey string
+
+const (
+	operationIDKey errorContextKey = "operation_id"
+	requestIDKey2  errorContextKey = "request_id"
+)
+
 func TestNewErrorMiddleware(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	middleware := NewErrorMiddleware(logger)
@@ -130,7 +138,7 @@ func TestHandleErrorWithContext(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	middleware := NewErrorMiddleware(logger)
 
-	ctx := context.WithValue(context.Background(), "operation_id", "op-123")
+	ctx := context.WithValue(context.Background(), operationIDKey, "op-123")
 	err := pkgerrors.NewAppError(
 		pkgerrors.ErrValidationFailed.Code,
 		"validation failed",
@@ -198,7 +206,7 @@ func TestHandleErrorContextPropagation(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	middleware := NewErrorMiddleware(logger)
 
-	ctx := context.WithValue(context.Background(), "request_id", "12345")
+	ctx := context.WithValue(context.Background(), requestIDKey2, "12345")
 
 	err := pkgerrors.NewAppError(
 		pkgerrors.ErrDatabaseError.Code,
@@ -263,4 +271,21 @@ func TestHandleErrorAllErrorCodes(t *testing.T) {
 			assert.Equal(t, tt.expectedCode, code)
 		})
 	}
+}
+
+func TestHandleErrorInsufficientFunds(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	middleware := NewErrorMiddleware(logger)
+
+	err := pkgerrors.NewAppError(
+		pkgerrors.ErrInsufficientFunds.Code,
+		"insufficient funds for transaction",
+		nil,
+	)
+
+	status, code, msg := middleware.HandleError(context.Background(), err)
+
+	assert.Equal(t, "ERROR", status)
+	assert.Equal(t, 500, code)
+	assert.Equal(t, "insufficient funds for transaction", msg)
 }

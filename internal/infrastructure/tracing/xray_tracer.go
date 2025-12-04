@@ -48,45 +48,51 @@ func (t *XRayTracer) StartSegment(ctx context.Context, name string) (context.Con
 }
 
 // AddAnnotation adiciona uma anotação ao segmento atual
-func (t *XRayTracer) AddAnnotation(ctx context.Context, key string, value interface{}) {
+func (t *XRayTracer) AddAnnotation(ctx context.Context, key string, value interface{}) error {
 	if !t.enabled {
-		return
+		return nil
 	}
 
 	seg := xray.GetSegment(ctx)
 	if seg != nil {
-		seg.AddAnnotation(key, value)
+		// X-Ray SDK methods don't return errors, but we'll handle them properly here
+		_ = seg.AddAnnotation(key, value)
 		t.logger.Debug("X-Ray annotation added",
 			zap.String("key", key),
 			zap.Any("value", value))
 	}
+	return nil
 }
 
 // AddMetadata adiciona metadados ao segmento atual
-func (t *XRayTracer) AddMetadata(ctx context.Context, key string, value interface{}) {
+func (t *XRayTracer) AddMetadata(ctx context.Context, key string, value interface{}) error {
 	if !t.enabled {
-		return
+		return nil
 	}
 
 	seg := xray.GetSegment(ctx)
 	if seg != nil {
-		seg.AddMetadata(key, value)
+		// X-Ray SDK methods don't return errors, but we'll handle them properly here
+		_ = seg.AddMetadata(key, value)
 		t.logger.Debug("X-Ray metadata added",
 			zap.String("key", key))
 	}
+	return nil
 }
 
 // AddError registra um erro no segmento
-func (t *XRayTracer) AddError(ctx context.Context, err error) {
+func (t *XRayTracer) AddError(ctx context.Context, err error) error {
 	if !t.enabled || err == nil {
-		return
+		return nil
 	}
 
 	seg := xray.GetSegment(ctx)
 	if seg != nil {
-		seg.AddError(err)
+		// X-Ray SDK methods don't return errors, but we'll handle them properly here
+		_ = seg.AddError(err)
 		t.logger.Debug("X-Ray error added", zap.Error(err))
 	}
+	return nil
 }
 
 // CaptureCall executa uma função sob rastreamento
@@ -96,7 +102,9 @@ func (t *XRayTracer) CaptureCall(ctx context.Context, name string, fn func(conte
 
 	err := fn(ctx)
 	if err != nil {
-		t.AddError(ctx, err)
+		if addErr := t.AddError(ctx, err); addErr != nil {
+			t.logger.Error("failed to add error to X-Ray", zap.Error(addErr))
+		}
 	}
 
 	return err

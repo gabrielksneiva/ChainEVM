@@ -63,15 +63,18 @@ func TestEthClientAdapterBalanceAt(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := new(MockEthClient)
+			expectedBalance := big.NewInt(100)
 			mockClient.On("BalanceAt", mock.Anything, tt.account, tt.blockNumber).
-				Return(big.NewInt(100), nil)
+				Return(expectedBalance, nil)
 
-			adapter := &EthClientAdapter{client: nil}
+			adapter := mockClient
 			ctx := context.Background()
 
-			// Teste que o método existe
-			_ = adapter
-			_ = ctx
+			balance, err := adapter.BalanceAt(ctx, tt.account, tt.blockNumber)
+
+			assert.NoError(t, err)
+			assert.Equal(t, expectedBalance, balance)
+			mockClient.AssertExpectations(t)
 		})
 	}
 }
@@ -115,8 +118,14 @@ func TestEthClientAdapterNonceAt(t *testing.T) {
 			mockClient.On("NonceAt", mock.Anything, tt.account, tt.blockNumber).
 				Return(tt.nonce, nil)
 
-			adapter := &EthClientAdapter{client: nil}
-			_ = adapter
+			adapter := mockClient
+			ctx := context.Background()
+
+			nonce, err := adapter.NonceAt(ctx, tt.account, tt.blockNumber)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.nonce, nonce)
+			mockClient.AssertExpectations(t)
 		})
 	}
 }
@@ -126,12 +135,18 @@ func TestEthClientAdapterPendingNonceAt(t *testing.T) {
 
 	account := common.HexToAddress("0x1234567890123456789012345678901234567890")
 	mockClient := new(MockEthClient)
+	expectedNonce := uint64(5)
 	mockClient.On("PendingNonceAt", mock.Anything, account).
-		Return(uint64(5), nil)
+		Return(expectedNonce, nil)
 
-	adapter := &EthClientAdapter{client: nil}
-	_ = adapter
-	_ = mockClient
+	adapter := mockClient
+	ctx := context.Background()
+
+	nonce, err := adapter.PendingNonceAt(ctx, account)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedNonce, nonce)
+	mockClient.AssertExpectations(t)
 }
 
 func TestEthClientAdapterSendTransaction(t *testing.T) {
@@ -167,9 +182,17 @@ func TestEthClientAdapterSendTransaction(t *testing.T) {
 					Return(nil)
 			}
 
-			adapter := &EthClientAdapter{client: nil}
-			_ = adapter
-			_ = mockClient
+			adapter := mockClient
+			ctx := context.Background()
+
+			err := adapter.SendTransaction(ctx, tx)
+
+			if tt.shouldError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			mockClient.AssertExpectations(t)
 		})
 	}
 }
@@ -212,9 +235,19 @@ func TestEthClientAdapterEstimateGas(t *testing.T) {
 					Return(tt.gasEstimate, nil)
 			}
 
-			adapter := &EthClientAdapter{client: nil}
-			_ = adapter
-			_ = mockClient
+			adapter := mockClient
+			ctx := context.Background()
+
+			gas, err := adapter.EstimateGas(ctx, msg)
+
+			if tt.shouldError {
+				assert.Error(t, err)
+				assert.Equal(t, uint64(0), gas)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.gasEstimate, gas)
+			}
+			mockClient.AssertExpectations(t)
 		})
 	}
 }
@@ -268,9 +301,23 @@ func TestEthClientAdapterTransactionReceipt(t *testing.T) {
 					Return(nil, nil)
 			}
 
-			adapter := &EthClientAdapter{client: nil}
-			_ = adapter
-			_ = mockClient
+			adapter := mockClient
+			ctx := context.Background()
+
+			receipt, err := adapter.TransactionReceipt(ctx, tt.txHash)
+
+			if tt.shouldError {
+				assert.Error(t, err)
+				assert.Nil(t, receipt)
+			} else if tt.hasReceipt {
+				assert.NoError(t, err)
+				assert.NotNil(t, receipt)
+				assert.Equal(t, tt.txHash, receipt.TxHash)
+			} else {
+				assert.NoError(t, err)
+				assert.Nil(t, receipt)
+			}
+			mockClient.AssertExpectations(t)
 		})
 	}
 }
@@ -312,9 +359,19 @@ func TestEthClientAdapterChainID(t *testing.T) {
 					Return(tt.chainID, nil)
 			}
 
-			adapter := &EthClientAdapter{client: nil}
-			_ = adapter
-			_ = mockClient
+			adapter := mockClient
+			ctx := context.Background()
+
+			chainID, err := adapter.ChainID(ctx)
+
+			if tt.wantError {
+				assert.Error(t, err)
+				assert.Nil(t, chainID)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.chainID, chainID)
+			}
+			mockClient.AssertExpectations(t)
 		})
 	}
 }
@@ -356,9 +413,19 @@ func TestEthClientAdapterSuggestGasPrice(t *testing.T) {
 					Return(tt.gasPrice, nil)
 			}
 
-			adapter := &EthClientAdapter{client: nil}
-			_ = adapter
-			_ = mockClient
+			adapter := mockClient
+			ctx := context.Background()
+
+			gasPrice, err := adapter.SuggestGasPrice(ctx)
+
+			if tt.wantError {
+				assert.Error(t, err)
+				assert.Nil(t, gasPrice)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.gasPrice, gasPrice)
+			}
+			mockClient.AssertExpectations(t)
 		})
 	}
 }
@@ -369,9 +436,11 @@ func TestEthClientAdapterClose(t *testing.T) {
 	mockClient := new(MockEthClient)
 	mockClient.On("Close").Return()
 
-	adapter := &EthClientAdapter{client: nil}
-	_ = adapter
-	_ = mockClient
+	adapter := mockClient
+
+	adapter.Close()
+
+	mockClient.AssertExpectations(t)
 }
 
 func TestEthClientAdapterInterfaceImplementation(t *testing.T) {

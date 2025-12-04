@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 
 	"go.uber.org/zap"
@@ -10,7 +9,6 @@ import (
 
 // Metrics gerencia métricas da aplicação
 type Metrics struct {
-	mu                 sync.RWMutex
 	logger             *zap.Logger
 	transactionCount   int64
 	transactionSuccess int64

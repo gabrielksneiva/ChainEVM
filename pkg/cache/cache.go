@@ -7,7 +7,7 @@ import (
 
 // CacheEntry representa uma entrada de cache
 type CacheEntry struct {
-	Value     interface{}
+	Value     any
 	ExpiresAt time.Time
 }
 
@@ -29,9 +29,12 @@ func NewRPCCache(ttl time.Duration, maxSize int) *RPCCache {
 }
 
 // Get retorna um valor do cache se existir e não expirou
-func (c *RPCCache) Get(key string) (interface{}, bool) {
+func (c *RPCCache) Get(key string) (any, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
+	// Evict all expired entries globally
+	c.evictExpired()
 
 	entry, ok := c.entries[key]
 	if !ok {
@@ -47,9 +50,11 @@ func (c *RPCCache) Get(key string) (interface{}, bool) {
 }
 
 // Set armazena um valor no cache
-func (c *RPCCache) Set(key string, value interface{}) {
+func (c *RPCCache) Set(key string, value any) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	c.evictExpired()
 
 	// Se cache está cheio, limpar entradas expiradas
 	if len(c.entries) >= c.maxSize {
@@ -92,6 +97,8 @@ func (c *RPCCache) evictExpired() {
 func (c *RPCCache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
+	c.evictExpired()
 
 	return len(c.entries)
 }

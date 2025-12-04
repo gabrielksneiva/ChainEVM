@@ -101,7 +101,9 @@ func (uc *ExecuteEVMTransactionUseCase) Execute(
 	if err := uc.transactionRepo.Save(ctx, transaction); err != nil {
 		uc.logger.Error("failed to save transaction", zap.Error(err))
 		transaction.MarkAsFailed("database error")
-		uc.transactionRepo.Save(ctx, transaction)
+		if saveErr := uc.transactionRepo.Save(ctx, transaction); saveErr != nil {
+			uc.logger.Error("failed to save failed transaction", zap.Error(saveErr))
+		}
 		return nil, pkgerrors.NewAppError(pkgerrors.ErrDatabaseError.Code, "failed to save transaction", err)
 	}
 
@@ -110,14 +112,16 @@ func (uc *ExecuteEVMTransactionUseCase) Execute(
 	if !ok {
 		uc.logger.Error("RPC client not found for chain", zap.String("chain", chainType.String()))
 		transaction.MarkAsFailed("RPC client not found")
-		uc.transactionRepo.Save(ctx, transaction)
+		if saveErr := uc.transactionRepo.Save(ctx, transaction); saveErr != nil {
+			uc.logger.Error("failed to save failed transaction", zap.Error(saveErr))
+		}
 		return nil, pkgerrors.NewAppError(pkgerrors.ErrChainNotSupported.Code, "chain not supported", nil)
 	}
 
 	// Executar baseado no tipo de operação
-	var txHash valueobjects.TransactionHash
-	var blockNumber int64
-	var gasUsed int64
+	txHash := valueobjects.TransactionHash("")
+	blockNumber := int64(0)
+	gasUsed := int64(0)
 
 	if operationType.IsWriteOperation() {
 		// Executar transação de escrita
@@ -128,7 +132,9 @@ func (uc *ExecuteEVMTransactionUseCase) Execute(
 		if err != nil {
 			uc.logger.Error("failed to get nonce", zap.Error(err))
 			transaction.MarkAsFailed("failed to get nonce")
-			uc.transactionRepo.Save(ctx, transaction)
+			if saveErr := uc.transactionRepo.Save(ctx, transaction); saveErr != nil {
+				uc.logger.Error("failed to save failed transaction", zap.Error(saveErr))
+			}
 			return nil, pkgerrors.NewAppError(pkgerrors.ErrRPCFailed.Code, "failed to get nonce", err)
 		}
 
@@ -137,7 +143,9 @@ func (uc *ExecuteEVMTransactionUseCase) Execute(
 		if err != nil {
 			uc.logger.Error("failed to get gas price", zap.Error(err))
 			transaction.MarkAsFailed("failed to get gas price")
-			uc.transactionRepo.Save(ctx, transaction)
+			if saveErr := uc.transactionRepo.Save(ctx, transaction); saveErr != nil {
+				uc.logger.Error("failed to save failed transaction", zap.Error(saveErr))
+			}
 			return nil, pkgerrors.NewAppError(pkgerrors.ErrRPCFailed.Code, "failed to get gas price", err)
 		}
 
@@ -145,9 +153,10 @@ func (uc *ExecuteEVMTransactionUseCase) Execute(
 
 		// Demo: registrar que a operação foi processada
 		// Em produção, assinaria e enviaria a transação real
-		txHash, _ = valueobjects.NewTransactionHash("0x0000000000000000000000000000000000000000000000000000000000000000")
-		blockNumber = 0
-		gasUsed = 21000
+		_, hashErr := valueobjects.NewTransactionHash("0x0000000000000000000000000000000000000000000000000000000000000000")
+		if hashErr != nil {
+			uc.logger.Error("failed to create transaction hash", zap.Error(hashErr))
+		}
 
 	} else {
 		// Executar query (read-only)
@@ -159,7 +168,9 @@ func (uc *ExecuteEVMTransactionUseCase) Execute(
 			if err != nil {
 				uc.logger.Error("failed to get balance", zap.Error(err))
 				transaction.MarkAsFailed("failed to get balance")
-				uc.transactionRepo.Save(ctx, transaction)
+				if saveErr := uc.transactionRepo.Save(ctx, transaction); saveErr != nil {
+					uc.logger.Error("failed to save failed transaction", zap.Error(saveErr))
+				}
 				return nil, pkgerrors.NewAppError(pkgerrors.ErrRPCFailed.Code, "failed to get balance", err)
 			}
 			_ = balance.String()
@@ -169,7 +180,9 @@ func (uc *ExecuteEVMTransactionUseCase) Execute(
 			if err != nil {
 				uc.logger.Error("failed to get nonce", zap.Error(err))
 				transaction.MarkAsFailed("failed to get nonce")
-				uc.transactionRepo.Save(ctx, transaction)
+				if saveErr := uc.transactionRepo.Save(ctx, transaction); saveErr != nil {
+					uc.logger.Error("failed to save failed transaction", zap.Error(saveErr))
+				}
 				return nil, pkgerrors.NewAppError(pkgerrors.ErrRPCFailed.Code, "failed to get nonce", err)
 			}
 			_ = nonce

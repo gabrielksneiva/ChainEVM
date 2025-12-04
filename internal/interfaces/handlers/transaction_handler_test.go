@@ -8,9 +8,23 @@ import (
 	"github.com/gabrielksneiva/ChainEVM/internal/application/dtos"
 	"github.com/gabrielksneiva/ChainEVM/pkg/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
+
+// MockExecuteUseCase for testing
+type MockExecuteUseCase struct {
+	mock.Mock
+}
+
+func (m *MockExecuteUseCase) Execute(ctx context.Context, req *dtos.ExecuteTransactionRequest) (*dtos.ExecuteTransactionResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dtos.ExecuteTransactionResponse), args.Error(1)
+}
 
 func TestNewTransactionHandler(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
@@ -439,4 +453,71 @@ func TestValidateRequestMissingToAddr(t *testing.T) {
 	err := handler.ValidateRequest(req)
 	assert.Error(t, err)
 	assert.Equal(t, "to_address is required", err.Error())
+}
+
+// Test ExecuteTransactionInternal with successful execution
+func TestExecuteTransactionInternalSuccess(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	cfg := &config.Config{}
+
+	mockUseCase := new(MockExecuteUseCase)
+	handler := NewTransactionHandler(mockUseCase, cfg, logger)
+
+	req := &dtos.ExecuteTransactionRequest{
+		OperationID:    "550e8400-e29b-41d4-a716-446655440000",
+		ChainType:      "ETHEREUM",
+		FromAddress:    "0x1111111111111111111111111111111111111111",
+		ToAddress:      "0x2222222222222222222222222222222222222222",
+		OperationType:  "TRANSFER",
+		Payload:        map[string]interface{}{"amount": "1.0"},
+		IdempotencyKey: "idem-key-123",
+	}
+
+	expectedResp := &dtos.ExecuteTransactionResponse{
+		OperationID:     req.OperationID,
+		Status:          "SUCCESS",
+		ChainType:       "ETHEREUM",
+		TransactionHash: "0xabcdef1234567890",
+		CreatedAt:       "2024-01-01T00:00:00Z",
+	}
+
+	mockUseCase.On("Execute", mock.Anything, req).Return(expectedResp, nil)
+
+	resp, code, err := handler.ExecuteTransaction(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, http.StatusOK, code)
+	assert.Equal(t, expectedResp.OperationID, resp.OperationID)
+	assert.Equal(t, expectedResp.Status, resp.Status)
+	assert.Equal(t, expectedResp.TransactionHash, resp.TransactionHash)
+	mockUseCase.AssertExpectations(t)
+}
+
+// Test ExecuteTransactionInternal with use case error
+func TestExecuteTransactionInternalUseCaseError(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	cfg := &config.Config{}
+
+	mockUseCase := new(MockExecuteUseCase)
+	handler := NewTransactionHandler(mockUseCase, cfg, logger)
+
+	req := &dtos.ExecuteTransactionRequest{
+		OperationID:    "550e8400-e29b-41d4-a716-446655440000",
+		ChainType:      "ETHEREUM",
+		FromAddress:    "0x1111111111111111111111111111111111111111",
+		ToAddress:      "0x2222222222222222222222222222222222222222",
+		OperationType:  "TRANSFER",
+		Payload:        map[string]interface{}{},
+		IdempotencyKey: "idem-key-456",
+	}
+
+	mockUseCase.On("Execute", mock.Anything, req).Return(nil, assert.AnError)
+
+	resp, code, err := handler.ExecuteTransaction(context.Background(), req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, http.StatusInternalServerError, code)
+	mockUseCase.AssertExpectations(t)
 }

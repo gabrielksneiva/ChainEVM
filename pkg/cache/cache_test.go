@@ -37,7 +37,7 @@ func TestCacheExpiration(t *testing.T) {
 	// Aguardar expiração
 	time.Sleep(150 * time.Millisecond)
 
-	value, ok = cache.Get("key")
+	_, ok = cache.Get("key")
 	assert.False(t, ok)
 }
 
@@ -49,6 +49,15 @@ func TestCacheDelete(t *testing.T) {
 
 	_, ok := cache.Get("key")
 	assert.False(t, ok)
+}
+
+func TestCacheGetNonExistent(t *testing.T) {
+	cache := NewRPCCache(10*time.Second, 100)
+
+	// Try to get a key that doesn't exist
+	value, ok := cache.Get("nonexistent")
+	assert.False(t, ok)
+	assert.Nil(t, value)
 }
 
 func TestCacheClear(t *testing.T) {
@@ -180,13 +189,34 @@ func TestCacheExpirationEdgeCase(t *testing.T) {
 	time.Sleep(40 * time.Millisecond)
 
 	// Should still exist
-	value, ok = cache.Get("expires")
+	_, ok = cache.Get("expires")
 	assert.True(t, ok)
 
 	// Wait for expiration
 	time.Sleep(30 * time.Millisecond)
 
 	// Should be expired now
-	value, ok = cache.Get("expires")
+	_, ok = cache.Get("expires")
 	assert.False(t, ok)
+}
+
+func TestCacheEvictionOnGet(t *testing.T) {
+	cache := NewRPCCache(50*time.Millisecond, 100)
+
+	cache.Set("key1", "value1")
+	cache.Set("key2", "value2")
+	cache.Set("key3", "value3")
+
+	// All entries should exist
+	assert.Equal(t, 3, cache.Size())
+
+	// Wait for all to expire
+	time.Sleep(60 * time.Millisecond)
+
+	// Calling Get triggers eviction
+	_, ok := cache.Get("key1")
+	assert.False(t, ok)
+
+	// Cache should now be empty after eviction
+	assert.Equal(t, 0, cache.Size())
 }

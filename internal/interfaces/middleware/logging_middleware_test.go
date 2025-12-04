@@ -9,6 +9,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// contextKey is a type for context keys to avoid collisions
+type contextKey string
+
+const (
+	requestIDKey contextKey = "request_id"
+	userIDKey    contextKey = "user_id"
+)
+
 func TestNewLoggingMiddleware(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	middleware := NewLoggingMiddleware(logger)
@@ -75,8 +83,8 @@ func TestLogRequestWithContextValues(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	middleware := NewLoggingMiddleware(logger)
 
-	ctx := context.WithValue(context.Background(), "request_id", "req-123")
-	ctx = context.WithValue(ctx, "user_id", "user-456")
+	ctx := context.WithValue(context.Background(), requestIDKey, "req-123")
+	ctx = context.WithValue(ctx, userIDKey, "user-456")
 
 	middleware.LogRequest(ctx, "op-ctx", "ETHEREUM")
 }
