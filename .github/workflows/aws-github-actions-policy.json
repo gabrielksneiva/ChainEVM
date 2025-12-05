@@ -1,0 +1,165 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LambdaManagement",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:PublishVersion",
+        "lambda:UpdateAlias",
+        "lambda:CreateAlias",
+        "lambda:ListVersionsByFunction",
+        "lambda:ListFunctions",
+        "lambda:InvokeFunction",
+        "lambda:CreateFunction",
+        "lambda:DeleteFunction",
+        "lambda:TagResource",
+        "lambda:UntagResource",
+        "lambda:ListTags",
+        "lambda:AddPermission",
+        "lambda:RemovePermission",
+        "lambda:GetPolicy"
+      ],
+      "Resource": [
+        "arn:aws:lambda:us-east-1:490873503238:function:chainevm-*",
+        "arn:aws:lambda:us-east-1:490873503238:function:ChainEVM-*"
+      ]
+    },
+    {
+      "Sid": "IAMManagement",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:UpdateRole",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies",
+        "iam:PassRole",
+        "iam:TagRole",
+        "iam:UntagRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::490873503238:role/chainevm-*",
+        "arn:aws:iam::490873503238:role/ChainEVM-*"
+      ]
+    },
+    {
+      "Sid": "DynamoDBManagement",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:CreateTable",
+        "dynamodb:DeleteTable",
+        "dynamodb:DescribeTable",
+        "dynamodb:UpdateTable",
+        "dynamodb:TagResource",
+        "dynamodb:UntagResource",
+        "dynamodb:PutItem",
+        "dynamodb:GetItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:us-east-1:490873503238:table/chainevm-*",
+        "arn:aws:dynamodb:us-east-1:490873503238:table/ChainEVM-*"
+      ]
+    },
+    {
+      "Sid": "SQSManagement",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:CreateQueue",
+        "sqs:DeleteQueue",
+        "sqs:GetQueueAttributes",
+        "sqs:SetQueueAttributes",
+        "sqs:GetQueueUrl",
+        "sqs:ListQueues",
+        "sqs:TagQueue",
+        "sqs:UntagQueue",
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:SendMessage",
+        "sqs:ChangeMessageVisibility"
+      ],
+      "Resource": [
+        "arn:aws:sqs:us-east-1:490873503238:chainevm-*",
+        "arn:aws:sqs:us-east-1:490873503238:ChainEVM-*"
+      ]
+    },
+    {
+      "Sid": "CloudWatchLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:DeleteLogGroup",
+        "logs:DescribeLogGroups",
+        "logs:PutRetentionPolicy",
+        "logs:TagLogGroup",
+        "logs:UntagLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": [
+        "arn:aws:logs:us-east-1:490873503238:log-group:/aws/lambda/chainevm-*",
+        "arn:aws:logs:us-east-1:490873503238:log-group:/aws/lambda/ChainEVM-*"
+      ]
+    },
+    {
+      "Sid": "CloudWatchMetrics",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricData"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "cloudwatch:namespace": "ChainEVM"
+        }
+      }
+    },
+    {
+      "Sid": "XRayTracing",
+      "Effect": "Allow",
+      "Action": [
+        "xray:PutTraceSegments",
+        "xray:PutTelemetryRecords"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3TerraformState",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::chainevm-terraform-state",
+        "arn:aws:s3:::chainevm-terraform-state/*"
+      ]
+    },
+    {
+      "Sid": "DynamoDBStateLock",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+      ],
+      "Resource": "arn:aws:dynamodb:us-east-1:490873503238:table/chainevm-terraform-state-lock"
+    }
+  ]
+}

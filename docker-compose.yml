@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # LocalStack para simular AWS localmente
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    environment:
+      - DEBUG=1
+      - SERVICES=sqs,dynamodb,s3,cloudwatch
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - "${TMPDIR:-/tmp/localstack}:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - chainevm
+
+  # DynamoDB Local (alternativa ao LocalStack)
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    networks:
+      - chainevm
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /data"
+    volumes:
+      - dynamodb-data:/data
+
+  # SQS Local (docker-compose alternativa)
+  elasticmq:
+    image: softwaremill/elasticmq:latest
+    ports:
+      - "9324:9324"
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    networks:
+      - chainevm
+    volumes:
+      - ./config/elasticmq.conf:/opt/elasticmq.conf:ro
+
+networks:
+  chainevm:
+    driver: bridge
+
+volumes:
+  dynamodb-data:
