@@ -1,3 +1,5 @@
+# AWS Region Configuration
+# Updated: 2025-12-04 - Testing CI/CD pipeline
 variable "aws_region" {
   description = "AWS region"
   type        = string

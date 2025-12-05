@@ -1,5 +1,8 @@
 package main
 
+// Lambda handler for EVM transaction execution
+// Updated: 2025-12-04 - Testing CI/CD pipeline
+
 import (
 	"context"
 	"encoding/json"
