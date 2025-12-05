@@ -265,7 +265,7 @@ jobs:
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
             FUNCTION_NAME="chainevm-prod"
           else
-            FUNCTION_NAME="chainevm-dev"
+            FUNCTION_NAME="chainevm"
           fi
           
           echo "⚡ Deploying to: $FUNCTION_NAME"

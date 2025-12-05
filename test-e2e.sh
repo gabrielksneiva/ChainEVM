@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 AWS_REGION="${AWS_REGION:-us-east-1}"
-LAMBDA_NAME="chainevm-dev"
+LAMBDA_NAME="chainevm"
 DYNAMODB_TABLE="evm-transactions"
 SQS_QUEUE_NAME="evm-queue"
 
