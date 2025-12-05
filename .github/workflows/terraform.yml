@@ -130,6 +130,15 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           terraform output
 
+      - name: Run E2E Tests
+        if: |
+          github.event.inputs.action == 'apply' || 
+          (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+        working-directory: .
+        run: |
+          chmod +x test-e2e.sh
+          ./test-e2e.sh
+
       - name: Summary
         if: always()
         run: |

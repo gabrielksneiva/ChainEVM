@@ -295,9 +295,9 @@ jobs:
         run: |
           # Determinar nome da função baseado na branch
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
-            FUNCTION_NAME="chainevm-executor-prod"
+            FUNCTION_NAME="chainevm-prod"
           else
-            FUNCTION_NAME="chainevm-executor-dev"
+            FUNCTION_NAME="chainevm-dev"
           fi
           
           echo "⚡ Deploying Lambda function: $FUNCTION_NAME"
@@ -317,9 +317,9 @@ jobs:
         run: |
           # Determinar nome da função baseado na branch
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
-            FUNCTION_NAME="chainevm-executor-prod"
+            FUNCTION_NAME="chainevm-prod"
           else
-            FUNCTION_NAME="chainevm-executor-dev"
+            FUNCTION_NAME="chainevm-dev"
           fi
           REGION="us-east-1"
           
@@ -340,7 +340,7 @@ jobs:
           echo ""
           echo "📋 Deployment Summary"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "✅ Lambda:       chainevm-executor"
+          echo "✅ Lambda:       chainevm-dev/chainevm-prod"
           echo "✅ Function:     EVM Transaction Executor"
           echo "✅ Region:       ${{ env.AWS_REGION }}"
           echo "✅ Commit:       ${{ github.sha }}"
@@ -384,9 +384,9 @@ jobs:
         run: |
           echo "📋 Test 1: Verify Lambda Function"
           
-          if aws lambda get-function --function-name chainevm-executor &>/dev/null; then
+          if aws lambda get-function --function-name chainevm-dev &>/dev/null; then
             echo "✅ Lambda function exists and is accessible"
-            aws lambda get-function-configuration --function-name chainevm-executor | jq '{FunctionArn, Runtime, MemorySize, Timeout}'
+            aws lambda get-function-configuration --function-name chainevm-dev | jq '{FunctionArn, Runtime, MemorySize, Timeout}'
           else
             echo "❌ Lambda function not found"
             exit 1
@@ -413,7 +413,7 @@ jobs:
           echo "📋 Test 3: Verify Lambda Event Source Mapping"
           
           MAPPINGS=$(aws lambda list-event-source-mappings \
-            --function-name chainevm-executor \
+            --function-name chainevm-dev \
             --query 'EventSourceMappings[].{UUID, State, EventSourceArn}' \
             --output json 2>/dev/null || echo '[]')
           
