@@ -1,0 +1,352 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: 'Terraform action (leave empty for auto)'
+        required: false
+        type: choice
+        options:
+          - ''
+          - plan
+          - apply
+          - destroy
+
+env:
+  GO_VERSION: '1.24'
+  AWS_REGION: us-east-1
+  TF_VERSION: 1.7.0
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  pull-requests: write
+  deployments: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==================== DETECT CHANGES ====================
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      go-code: ${{ steps.changes.outputs.go-code }}
+      terraform: ${{ steps.changes.outputs.terraform }}
+      any-change: ${{ steps.changes.outputs.any-change }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect file changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "go-code=true" >> $GITHUB_OUTPUT
+            echo "terraform=true" >> $GITHUB_OUTPUT
+            echo "any-change=true" >> $GITHUB_OUTPUT
+          else
+            # Get changed files
+            if [ "${{ github.event_name }}" == "pull_request" ]; then
+              CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
+            else
+              CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+            fi
+            
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+            
+            # Check for Go code changes
+            if echo "$CHANGED_FILES" | grep -qE '\.(go|mod|sum)$|^cmd/|^internal/|^pkg/'; then
+              echo "go-code=true" >> $GITHUB_OUTPUT
+              GO_CHANGED=true
+            else
+              echo "go-code=false" >> $GITHUB_OUTPUT
+              GO_CHANGED=false
+            fi
+            
+            # Check for Terraform changes
+            if echo "$CHANGED_FILES" | grep -qE '^terraform/'; then
+              echo "terraform=true" >> $GITHUB_OUTPUT
+              TF_CHANGED=true
+            else
+              echo "terraform=false" >> $GITHUB_OUTPUT
+              TF_CHANGED=false
+            fi
+            
+            # Any change?
+            if [ "$GO_CHANGED" == "true" ] || [ "$TF_CHANGED" == "true" ]; then
+              echo "any-change=true" >> $GITHUB_OUTPUT
+            else
+              echo "any-change=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  # ==================== BUILD & TEST ====================
+  build-and-test:
+    name: Build & Test
+    needs: detect-changes
+    if: needs.detect-changes.outputs.go-code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          args: --timeout=5m
+
+      - name: Run tests
+        run: |
+          go test -v -race -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out
+
+      - name: Build Lambda
+        run: |
+          GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o bootstrap cmd/lambda/main.go
+          zip -j lambda.zip bootstrap
+          ls -lh lambda.zip
+
+      - name: Upload Lambda artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: lambda-package
+          path: lambda.zip
+          retention-days: 1
+
+  # ==================== TERRAFORM ====================
+  terraform:
+    name: Terraform
+    needs: detect-changes
+    if: needs.detect-changes.outputs.terraform == 'true' || github.event.inputs.terraform_action != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    outputs:
+      terraform-applied: ${{ steps.apply-check.outputs.applied }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-terraform
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Format Check
+        working-directory: terraform
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: terraform
+        run: |
+          terraform plan -out=tfplan -input=false
+          terraform show -no-color tfplan > plan.txt
+
+      - name: Comment PR with Plan
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('terraform/plan.txt', 'utf8');
+            const output = `#### Terraform Plan 📋
+            <details><summary>Show Plan</summary>
+            
+            \`\`\`terraform
+            ${plan}
+            \`\`\`
+            
+            </details>`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: Terraform Apply
+        id: apply
+        if: |
+          (github.event.inputs.terraform_action == 'apply') ||
+          (github.event.inputs.terraform_action == '' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+        working-directory: terraform
+        run: terraform apply -auto-approve tfplan
+
+      - name: Terraform Destroy
+        if: github.event.inputs.terraform_action == 'destroy'
+        working-directory: terraform
+        run: terraform destroy -auto-approve
+
+      - name: Check if applied
+        id: apply-check
+        run: |
+          if [ "${{ steps.apply.outcome }}" == "success" ]; then
+            echo "applied=true" >> $GITHUB_OUTPUT
+          else
+            echo "applied=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ==================== DEPLOY ====================
+  deploy:
+    name: Deploy Lambda
+    needs: [detect-changes, build-and-test]
+    if: |
+      needs.detect-changes.outputs.go-code == 'true' &&
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      deployed: ${{ steps.deploy-check.outputs.deployed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-deploy
+
+      - name: Download Lambda artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: lambda-package
+
+      - name: Deploy to Lambda
+        id: deploy
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            FUNCTION_NAME="chainevm-prod"
+          else
+            FUNCTION_NAME="chainevm-dev"
+          fi
+          
+          echo "⚡ Deploying to: $FUNCTION_NAME"
+          
+          aws lambda update-function-code \
+            --function-name "$FUNCTION_NAME" \
+            --zip-file fileb://lambda.zip \
+            --output json | jq -r '.Version, .LastModified, .CodeSha256'
+          
+          echo "⏳ Waiting for update..."
+          aws lambda wait function-updated --function-name "$FUNCTION_NAME"
+          
+          echo "✅ Deployed successfully"
+
+      - name: Check deployment
+        id: deploy-check
+        run: |
+          if [ "${{ steps.deploy.outcome }}" == "success" ]; then
+            echo "deployed=true" >> $GITHUB_OUTPUT
+          else
+            echo "deployed=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ==================== E2E TESTS ====================
+  e2e-tests:
+    name: E2E Tests
+    needs: [terraform, deploy]
+    if: |
+      always() && 
+      !cancelled() &&
+      (needs.terraform.outputs.terraform-applied == 'true' || needs.deploy.outputs.deployed == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-e2e
+
+      - name: Run E2E Tests
+        run: |
+          chmod +x test-e2e.sh
+          ./test-e2e.sh
+
+      - name: E2E Test Results
+        if: always()
+        run: |
+          if [ -f e2e-results.txt ]; then
+            cat e2e-results.txt >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==================== SUMMARY ====================
+  summary:
+    name: Deployment Summary
+    needs: [detect-changes, build-and-test, terraform, deploy, e2e-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "# 🚀 CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Changes Detected" >> $GITHUB_STEP_SUMMARY
+          echo "- **Go Code**: ${{ needs.detect-changes.outputs.go-code }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Terraform**: ${{ needs.detect-changes.outputs.terraform }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Job Results" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build & Test**: ${{ needs.build-and-test.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Terraform**: ${{ needs.terraform.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deploy**: ${{ needs.deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **E2E Tests**: ${{ needs.e2e-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
