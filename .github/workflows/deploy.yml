@@ -397,7 +397,7 @@ jobs:
           echo "📋 Test 2: Verify SQS Queue Configuration"
           
           QUEUE_URL=$(aws sqs list-queues \
-            --queue-name-prefix "chainevm-events" \
+            --queue-name-prefix "evm-queue" \
             --query 'QueueUrls[0]' \
             --output text 2>/dev/null)
           
