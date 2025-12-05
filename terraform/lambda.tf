@@ -38,7 +38,7 @@ resource "aws_iam_role_policy" "lambda_sqs_policy" {
           "sqs:GetQueueAttributes",
           "sqs:ChangeMessageVisibility"
         ]
-        Resource = data.aws_sqs_queue.evm_queue.arn
+        Resource = local.evm_queue_arn
       }
     ]
   })
@@ -80,7 +80,7 @@ resource "aws_lambda_function" "evm_executor" {
   environment {
     variables = {
       DYNAMODB_TABLE_NAME     = aws_dynamodb_table.transactions.name
-      SQS_QUEUE_URL           = data.aws_sqs_queue.evm_queue.url
+      SQS_QUEUE_URL           = local.evm_queue_url
       RPC_URL_ETHEREUM        = var.rpc_url_ethereum
       RPC_URL_POLYGON         = var.rpc_url_polygon
       RPC_URL_BSC             = var.rpc_url_bsc
@@ -102,7 +102,7 @@ resource "aws_lambda_function" "evm_executor" {
 
 # Lambda Event Source Mapping (SQS trigger)
 resource "aws_lambda_event_source_mapping" "sqs_trigger" {
-  event_source_arn                   = data.aws_sqs_queue.evm_queue.arn
+  event_source_arn                   = local.evm_queue_arn
   function_name                      = aws_lambda_function.evm_executor.arn
   batch_size                         = 1
   maximum_batching_window_in_seconds = 5

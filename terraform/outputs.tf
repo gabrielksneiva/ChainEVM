@@ -20,22 +20,22 @@ output "lambda_role_arn" {
 
 output "sqs_queue_url" {
   description = "URL of the SQS queue"
-  value       = data.aws_sqs_queue.evm_queue.url
+  value       = local.evm_queue_url
 }
 
 output "sqs_queue_arn" {
   description = "ARN of the SQS queue"
-  value       = data.aws_sqs_queue.evm_queue.arn
+  value       = local.evm_queue_arn
 }
 
 output "sqs_dlq_url" {
   description = "URL of the SQS Dead Letter Queue"
-  value       = data.aws_sqs_queue.evm_dlq.url
+  value       = local.evm_dlq_url
 }
 
 output "sqs_dlq_arn" {
   description = "ARN of the SQS Dead Letter Queue"
-  value       = data.aws_sqs_queue.evm_dlq.arn
+  value       = local.evm_dlq_arn
 }
 
 output "dynamodb_table_name" {
@@ -67,7 +67,7 @@ output "deployment_summary" {
   description = "Summary of deployed resources"
   value = {
     lambda_function = aws_lambda_function.evm_executor.function_name
-    sqs_queue       = data.aws_sqs_queue.evm_queue.name
+    sqs_queue       = var.sqs_queue_name
     dynamodb_table  = aws_dynamodb_table.transactions.name
     region          = var.aws_region
   }

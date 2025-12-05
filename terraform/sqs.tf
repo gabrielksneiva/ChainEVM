@@ -1,12 +1,17 @@
-# Data source para a fila SQS existente (criada pelo chainorchestrator)
-data "aws_sqs_queue" "evm_queue" {
-  name = var.sqs_queue_name
+# Locals para construir ARNs e URLs das filas SQS (criadas pelo chainorchestrator)
+locals {
+  aws_account_id = data.aws_caller_identity.current.account_id
+  aws_region     = data.aws_region.current.name
+  
+  evm_queue_arn = "arn:aws:sqs:${local.aws_region}:${local.aws_account_id}:${var.sqs_queue_name}"
+  evm_queue_url = "https://sqs.${local.aws_region}.amazonaws.com/${local.aws_account_id}/${var.sqs_queue_name}"
+  evm_dlq_arn   = "arn:aws:sqs:${local.aws_region}:${local.aws_account_id}:${var.sqs_dlq_name}"
+  evm_dlq_url   = "https://sqs.${local.aws_region}.amazonaws.com/${local.aws_account_id}/${var.sqs_dlq_name}"
 }
 
-# Data source para a DLQ existente (criada pelo chainorchestrator)
-data "aws_sqs_queue" "evm_dlq" {
-  name = var.sqs_dlq_name
-}
+# Data sources para obter informações da conta e região
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
 # CloudWatch Alarm for queue depth
 resource "aws_cloudwatch_metric_alarm" "sqs_queue_depth" {
@@ -21,7 +26,7 @@ resource "aws_cloudwatch_metric_alarm" "sqs_queue_depth" {
   alarm_description   = "Alert when SQS queue has too many messages"
 
   dimensions = {
-    QueueName = data.aws_sqs_queue.evm_queue.name
+    QueueName = var.sqs_queue_name
   }
 }
 
@@ -38,6 +43,6 @@ resource "aws_cloudwatch_metric_alarm" "sqs_dlq_messages" {
   alarm_description   = "Alert when messages appear in DLQ"
 
   dimensions = {
-    QueueName = data.aws_sqs_queue.evm_dlq.name
+    QueueName = var.sqs_dlq_name
   }
 }
