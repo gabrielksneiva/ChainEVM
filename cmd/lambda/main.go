@@ -1,7 +1,7 @@
 package main
 
 // Lambda handler for EVM transaction execution
-// Updated: 2025-12-04 23:05 - Testing E2E fixes
+// Updated: 2025-12-04 23:10 - Testing E2E with full IAM permissions
 
 import (
 	"context"
