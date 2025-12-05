@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"math/big"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -72,8 +73,40 @@ func init() {
 		}
 	}
 
+	// Initialize TransactionSigner for signing and monitoring confirmations
+	var transactionSigner *rpc.TransactionSigner
+	if len(rpcClients) > 0 {
+		// Get first available RPC client and extract EthClient
+		var firstEthClient rpc.EthClient
+		for _, rpcclient := range rpcClients {
+			// EVMRPCClient has a client field that implements EthClient
+			if evmClient, ok := rpcclient.(*rpc.EVMRPCClient); ok {
+				// Access the embedded EthClient (need public getter or direct access)
+				// For now, use adapter approach: create a new adapter from EVMRPCClient
+				firstEthClient = evmClient.GetEthClient()
+				break
+			}
+		}
+		if firstEthClient != nil {
+			// Use required confirmations from config
+			chainID := big.NewInt(11155111) // Sepolia chain ID
+			transactionSigner = rpc.NewTransactionSigner(
+				firstEthClient,
+				chainID,
+				log,
+				cfg.RPCTimeout,
+			)
+			log.Info("TransactionSigner initialized", zap.Int64("chain_id", chainID.Int64()))
+		}
+	}
+
 	// Initialize use cases
-	executeUseCase = usecases.NewExecuteEVMTransactionUseCase(rpcClients, transactionRepo, log)
+	executeUseCase = usecases.NewExecuteEVMTransactionUseCase(
+		rpcClients,
+		transactionRepo,
+		transactionSigner,
+		log,
+	)
 
 	log.Info("Lambda function initialized successfully",
 		zap.String("environment", cfg.Environment),

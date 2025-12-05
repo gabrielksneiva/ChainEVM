@@ -451,3 +451,19 @@ func TestEthClientAdapterInterfaceImplementation(t *testing.T) {
 	// Verificar que adapter implementa a interface EthClient
 	var _ EthClient = adapter
 }
+
+func TestEthClientAdapterBlockNumber(t *testing.T) {
+	t.Parallel()
+
+	mockClient := new(MockEthClient)
+	blockNum := uint64(1000000)
+	mockClient.On("BlockNumber", mock.Anything).Return(blockNum, nil)
+
+	adapter := mockClient
+
+	num, err := adapter.BlockNumber(context.Background())
+
+	assert.NoError(t, err)
+	assert.Equal(t, blockNum, num)
+	mockClient.AssertExpectations(t)
+}

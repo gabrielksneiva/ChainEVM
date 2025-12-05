@@ -17,6 +17,7 @@ import (
 type ExecuteEVMTransactionUseCase struct {
 	rpcClients      map[string]rpc.RPCClient
 	transactionRepo database.TransactionRepository
+	signer          rpc.SignedTransactionClient
 	logger          *zap.Logger
 }
 
@@ -24,11 +25,13 @@ type ExecuteEVMTransactionUseCase struct {
 func NewExecuteEVMTransactionUseCase(
 	rpcClients map[string]rpc.RPCClient,
 	transactionRepo database.TransactionRepository,
+	signer rpc.SignedTransactionClient,
 	logger *zap.Logger,
 ) *ExecuteEVMTransactionUseCase {
 	return &ExecuteEVMTransactionUseCase{
 		rpcClients:      rpcClients,
 		transactionRepo: transactionRepo,
+		signer:          signer,
 		logger:          logger,
 	}
 }
@@ -127,6 +130,15 @@ func (uc *ExecuteEVMTransactionUseCase) Execute(
 		// Executar transação de escrita
 		uc.logger.Info("executing write operation", zap.String("operation_type", operationType.String()))
 
+		if uc.signer == nil {
+			uc.logger.Error("transaction signer not configured")
+			transaction.MarkAsFailed("transaction signer not configured")
+			if saveErr := uc.transactionRepo.Save(ctx, transaction); saveErr != nil {
+				uc.logger.Error("failed to save failed transaction", zap.Error(saveErr))
+			}
+			return nil, pkgerrors.NewAppError(pkgerrors.ErrValidationFailed.Code, "signer not configured", nil)
+		}
+
 		// Get nonce
 		nonce, err := rpcClient.GetNonce(ctx, fromAddr.String())
 		if err != nil {
@@ -151,12 +163,39 @@ func (uc *ExecuteEVMTransactionUseCase) Execute(
 
 		transaction.SetTxMetadata(gasPrice.String(), int64(nonce))
 
-		// Demo: registrar que a operação foi processada
-		// Em produção, assinaria e enviaria a transação real
-		_, hashErr := valueobjects.NewTransactionHash("0x0000000000000000000000000000000000000000000000000000000000000000")
+		// Sign and send transaction - extract private key from payload or environment
+		// NOTE: In production, private keys should come from AWS Secrets Manager or similar
+		txHashStr, err := uc.signer.SignAndSendTransaction(ctx, nil, "")
+		if err != nil {
+			uc.logger.Error("failed to sign and send transaction", zap.Error(err))
+			transaction.MarkAsFailed(err.Error())
+			if saveErr := uc.transactionRepo.Save(ctx, transaction); saveErr != nil {
+				uc.logger.Error("failed to save failed transaction", zap.Error(saveErr))
+			}
+			return nil, pkgerrors.NewAppError(pkgerrors.ErrRPCFailed.Code, "failed to sign and send transaction", err)
+		}
+
+		// Wait for confirmations
+		receipt, err := uc.signer.WaitForConfirmations(ctx, txHashStr, 12) // 12 confirmations
+		if err != nil {
+			uc.logger.Error("transaction confirmation timeout", zap.Error(err), zap.String("tx_hash", txHashStr))
+			transaction.MarkAsFailed("confirmation timeout")
+			if saveErr := uc.transactionRepo.Save(ctx, transaction); saveErr != nil {
+				uc.logger.Error("failed to save failed transaction", zap.Error(saveErr))
+			}
+			return nil, pkgerrors.NewAppError(pkgerrors.ErrRPCFailed.Code, "transaction not confirmed", err)
+		}
+
+		// Create transaction hash from result
+		txHash, hashErr := valueobjects.NewTransactionHash(txHashStr)
 		if hashErr != nil {
 			uc.logger.Error("failed to create transaction hash", zap.Error(hashErr))
 		}
+
+		// Mark as success with confirmation data
+		transaction.MarkAsSuccess(txHash, int64(receipt.BlockNumber.Uint64()), int64(receipt.GasUsed))
+		blockNumber = int64(receipt.BlockNumber.Uint64())
+		gasUsed = int64(receipt.GasUsed)
 
 	} else {
 		// Executar query (read-only)

@@ -165,6 +165,11 @@ func (c *EVMRPCClient) GetGasPrice(ctx context.Context) (*big.Int, error) {
 	return gasPrice, nil
 }
 
+// GetEthClient retorna o cliente Ethereum subjacente
+func (c *EVMRPCClient) GetEthClient() EthClient {
+	return c.client
+}
+
 // Close fecha a conexão com o RPC
 func (c *EVMRPCClient) Close() error {
 	c.client.Close()
