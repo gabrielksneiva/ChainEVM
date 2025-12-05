@@ -194,8 +194,6 @@ func (uc *ExecuteEVMTransactionUseCase) Execute(
 
 		// Mark as success with confirmation data
 		transaction.MarkAsSuccess(txHash, int64(receipt.BlockNumber.Uint64()), int64(receipt.GasUsed))
-		blockNumber = int64(receipt.BlockNumber.Uint64())
-		gasUsed = int64(receipt.GasUsed)
 
 	} else {
 		// Executar query (read-only)
