@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+# Don't use set -e, we want to run all tests even if some fail
+# Exit code will be determined by test results at the end
 
 echo "🧪 Starting ChainEVM E2E Tests..."
 echo "=========================================="
