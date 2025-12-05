@@ -1,5 +1,5 @@
-# AWS Region Configuration
-# Updated: 2025-12-04 23:05 - Testing E2E fixes
+# AWS Region Configuration  
+# Updated: 2025-12-04 23:15 - Testing E2E with CloudWatch DescribeAlarms fix
 variable "aws_region" {
   description = "AWS region"
   type        = string
