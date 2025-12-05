@@ -127,7 +127,7 @@ jobs:
           ls -lh lambda.zip
 
       - name: Upload Lambda artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lambda-package
           path: lambda.zip
@@ -255,7 +255,7 @@ jobs:
           role-session-name: github-actions-deploy
 
       - name: Download Lambda artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: lambda-package
 
