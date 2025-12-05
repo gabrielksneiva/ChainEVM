@@ -1,5 +1,5 @@
 # AWS Region Configuration
-# Updated: 2025-12-04 23:00 - Testing CI/CD pipeline with IAM fixes
+# Updated: 2025-12-04 23:05 - Testing E2E fixes
 variable "aws_region" {
   description = "AWS region"
   type        = string

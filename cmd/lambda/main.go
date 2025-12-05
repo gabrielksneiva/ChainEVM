@@ -1,7 +1,7 @@
 package main
 
 // Lambda handler for EVM transaction execution
-// Updated: 2025-12-04 23:00 - Testing CI/CD pipeline with IAM fixes
+// Updated: 2025-12-04 23:05 - Testing E2E fixes
 
 import (
 	"context"
