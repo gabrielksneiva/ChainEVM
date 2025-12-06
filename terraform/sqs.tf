@@ -2,7 +2,7 @@
 locals {
   aws_account_id = data.aws_caller_identity.current.account_id
   aws_region     = data.aws_region.current.name
-  
+
   evm_queue_arn = "arn:aws:sqs:${local.aws_region}:${local.aws_account_id}:${var.sqs_queue_name}"
   evm_queue_url = "https://sqs.${local.aws_region}.amazonaws.com/${local.aws_account_id}/${var.sqs_queue_name}"
   evm_dlq_arn   = "arn:aws:sqs:${local.aws_region}:${local.aws_account_id}:${var.sqs_dlq_name}"
