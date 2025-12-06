@@ -115,7 +115,9 @@ resource "aws_iam_role_policy" "github_actions_terraform_policy" {
           "iam:PutRolePolicy",
           "iam:DeleteRolePolicy",
           "iam:TagRole",
-          "iam:UntagRole"
+          "iam:UntagRole",
+          "iam:ListOpenIDConnectProviders",
+          "iam:GetOpenIDConnectProvider"
         ]
         Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/*"
       },
