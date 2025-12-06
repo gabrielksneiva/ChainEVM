@@ -20,6 +20,7 @@ type EthClient interface {
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	ChainID(ctx context.Context) (*big.Int, error)
 	SuggestGasPrice(ctx context.Context) (*big.Int, error)
+	BlockNumber(ctx context.Context) (uint64, error)
 	Close()
 }
 
@@ -71,6 +72,11 @@ func (a *EthClientAdapter) ChainID(ctx context.Context) (*big.Int, error) {
 // SuggestGasPrice delega ao cliente real
 func (a *EthClientAdapter) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 	return a.client.SuggestGasPrice(ctx)
+}
+
+// BlockNumber delega ao cliente real
+func (a *EthClientAdapter) BlockNumber(ctx context.Context) (uint64, error) {
+	return a.client.BlockNumber(ctx)
 }
 
 // Close delega ao cliente real

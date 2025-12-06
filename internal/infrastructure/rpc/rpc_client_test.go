@@ -71,6 +71,11 @@ func (m *MockEthClient) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 	return args.Get(0).(*big.Int), args.Error(1)
 }
 
+func (m *MockEthClient) BlockNumber(ctx context.Context) (uint64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(uint64), args.Error(1)
+}
+
 func (m *MockEthClient) Close() {
 	m.Called()
 }
@@ -372,4 +377,20 @@ func TestEVMRPCClient_Close(t *testing.T) {
 
 	assert.NoError(t, err)
 	mockClient.AssertExpectations(t)
+}
+
+func TestEVMRPCClient_GetEthClient(t *testing.T) {
+	t.Parallel()
+
+	mockClient := new(MockEthClient)
+	logger, _ := zap.NewDevelopment()
+
+	rpcClient := &EVMRPCClient{
+		client: mockClient,
+		logger: logger,
+	}
+
+	ethClient := rpcClient.GetEthClient()
+
+	assert.Equal(t, mockClient, ethClient)
 }

@@ -105,6 +105,24 @@ func (m *MockTransactionRepository) UpdateStatus(ctx context.Context, operationI
 	return args.Error(0)
 }
 
+// MockTransactionSigner implements rpc.SignedTransactionClient interface
+type MockTransactionSigner struct {
+	mock.Mock
+}
+
+func (m *MockTransactionSigner) SignAndSendTransaction(ctx context.Context, tx *types.Transaction, privateKeyHex string) (string, error) {
+	args := m.Called(ctx, tx, privateKeyHex)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockTransactionSigner) WaitForConfirmations(ctx context.Context, txHashHex string, requiredConfirmations int) (*types.Receipt, error) {
+	args := m.Called(ctx, txHashHex, requiredConfirmations)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*types.Receipt), args.Error(1)
+}
+
 func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 
@@ -116,7 +134,7 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 			"ETHEREUM": mockRPC,
 		}
 
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, nil, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440001",
@@ -149,7 +167,7 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 			"ETHEREUM": mockRPC,
 		}
 
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, nil, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440003",
@@ -176,12 +194,13 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 	t.Run("execute write operation successfully", func(t *testing.T) {
 		mockRPC := new(MockRPCClient)
 		mockRepo := new(MockTransactionRepository)
+		mockSigner := new(MockTransactionSigner)
 
 		rpcClients := map[string]rpc.RPCClient{
 			"ETHEREUM": mockRPC,
 		}
 
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, mockSigner, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440005",
@@ -197,6 +216,11 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRepo.On("Save", mock.Anything, mock.AnythingOfType("*entities.EVMTransaction")).Return(nil).Times(2)
 		mockRPC.On("GetNonce", mock.Anything, mock.AnythingOfType("string")).Return(uint64(10), nil)
 		mockRPC.On("GetGasPrice", mock.Anything).Return(big.NewInt(20000000000), nil)
+		mockSigner.On("SignAndSendTransaction", mock.Anything, mock.Anything, mock.Anything).Return("0xabc123def456", nil)
+		mockSigner.On("WaitForConfirmations", mock.Anything, "0xabc123def456", 12).Return(&types.Receipt{
+			BlockNumber: big.NewInt(1000),
+			GasUsed:     21000,
+		}, nil)
 
 		resp, err := useCase.Execute(context.Background(), req)
 
@@ -214,7 +238,7 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 			"ETHEREUM": mockRPC,
 		}
 
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, nil, logger)
 
 		chainType, _ := valueobjects.NewChainType("ETHEREUM")
 		opType, _ := valueobjects.NewOperationType("GET_BALANCE")
@@ -249,7 +273,7 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRepo := new(MockTransactionRepository)
 
 		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, nil, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440009",
@@ -272,7 +296,7 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRepo := new(MockTransactionRepository)
 
 		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, nil, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "invalid",
@@ -295,7 +319,7 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRepo := new(MockTransactionRepository)
 
 		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, nil, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440018",
@@ -321,7 +345,7 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRepo := new(MockTransactionRepository)
 
 		rpcClients := map[string]rpc.RPCClient{}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, nil, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440020",
@@ -348,7 +372,7 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRepo := new(MockTransactionRepository)
 
 		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, nil, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440022",
@@ -375,9 +399,10 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 	t.Run("fail when GetNonce fails in write operation", func(t *testing.T) {
 		mockRPC := new(MockRPCClient)
 		mockRepo := new(MockTransactionRepository)
+		mockSigner := new(MockTransactionSigner)
 
 		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, mockSigner, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440026",
@@ -404,9 +429,10 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 	t.Run("fail when GetGasPrice fails", func(t *testing.T) {
 		mockRPC := new(MockRPCClient)
 		mockRepo := new(MockTransactionRepository)
+		mockSigner := new(MockTransactionSigner)
 
 		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, mockSigner, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440028",
@@ -431,12 +457,80 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRPC.AssertExpectations(t)
 	})
 
+	t.Run("fail when SignAndSendTransaction fails", func(t *testing.T) {
+		mockRPC := new(MockRPCClient)
+		mockRepo := new(MockTransactionRepository)
+		mockSigner := new(MockTransactionSigner)
+
+		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, mockSigner, logger)
+
+		req := &dtos.ExecuteTransactionRequest{
+			OperationID:    "550e8400-e29b-41d4-a716-446655440030",
+			ChainType:      "ETHEREUM",
+			OperationType:  "TRANSFER",
+			FromAddress:    "0x1234567890123456789012345678901234567890",
+			ToAddress:      "0x0987654321098765432109876543210987654321",
+			Payload:        map[string]interface{}{"amount": "1000000000000000000"},
+			IdempotencyKey: "550e8400-e29b-41d4-a716-446655440031",
+		}
+
+		mockRepo.On("GetByIdempotencyKey", mock.Anything, req.IdempotencyKey).Return(nil, errors.New("not found"))
+		mockRepo.On("Save", mock.Anything, mock.AnythingOfType("*entities.EVMTransaction")).Return(nil).Times(2)
+		mockRPC.On("GetNonce", mock.Anything, mock.AnythingOfType("string")).Return(uint64(10), nil)
+		mockRPC.On("GetGasPrice", mock.Anything).Return(big.NewInt(20000000000), nil)
+		mockSigner.On("SignAndSendTransaction", mock.Anything, mock.Anything, mock.Anything).Return("", errors.New("signing failed"))
+
+		resp, err := useCase.Execute(context.Background(), req)
+
+		require.Error(t, err)
+		assert.Nil(t, resp)
+		mockRepo.AssertExpectations(t)
+		mockRPC.AssertExpectations(t)
+		mockSigner.AssertExpectations(t)
+	})
+
+	t.Run("fail when WaitForConfirmations times out", func(t *testing.T) {
+		mockRPC := new(MockRPCClient)
+		mockRepo := new(MockTransactionRepository)
+		mockSigner := new(MockTransactionSigner)
+
+		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, mockSigner, logger)
+
+		req := &dtos.ExecuteTransactionRequest{
+			OperationID:    "550e8400-e29b-41d4-a716-446655440040",
+			ChainType:      "ETHEREUM",
+			OperationType:  "TRANSFER",
+			FromAddress:    "0x1234567890123456789012345678901234567890",
+			ToAddress:      "0x0987654321098765432109876543210987654321",
+			Payload:        map[string]interface{}{"amount": "1000000000000000000"},
+			IdempotencyKey: "550e8400-e29b-41d4-a716-446655440041",
+		}
+
+		mockRepo.On("GetByIdempotencyKey", mock.Anything, req.IdempotencyKey).Return(nil, errors.New("not found"))
+		mockRepo.On("Save", mock.Anything, mock.AnythingOfType("*entities.EVMTransaction")).Return(nil).Times(2)
+		mockRPC.On("GetNonce", mock.Anything, mock.AnythingOfType("string")).Return(uint64(10), nil)
+		mockRPC.On("GetGasPrice", mock.Anything).Return(big.NewInt(20000000000), nil)
+		mockSigner.On("SignAndSendTransaction", mock.Anything, mock.Anything, mock.Anything).Return("0xabc123", nil)
+		mockSigner.On("WaitForConfirmations", mock.Anything, "0xabc123", 12).Return(nil, errors.New("timeout"))
+
+		resp, err := useCase.Execute(context.Background(), req)
+
+		require.Error(t, err)
+		assert.Nil(t, resp)
+		mockRepo.AssertExpectations(t)
+		mockRPC.AssertExpectations(t)
+		mockSigner.AssertExpectations(t)
+	})
+
 	t.Run("execute CALL operation successfully", func(t *testing.T) {
 		mockRPC := new(MockRPCClient)
 		mockRepo := new(MockTransactionRepository)
+		mockSigner := new(MockTransactionSigner)
 
 		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, mockSigner, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440032",
@@ -452,6 +546,11 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRepo.On("Save", mock.Anything, mock.AnythingOfType("*entities.EVMTransaction")).Return(nil).Times(2)
 		mockRPC.On("GetNonce", mock.Anything, mock.AnythingOfType("string")).Return(uint64(15), nil)
 		mockRPC.On("GetGasPrice", mock.Anything).Return(big.NewInt(30000000000), nil)
+		mockSigner.On("SignAndSendTransaction", mock.Anything, mock.Anything, mock.Anything).Return("0xdef789abc123", nil)
+		mockSigner.On("WaitForConfirmations", mock.Anything, "0xdef789abc123", 12).Return(&types.Receipt{
+			BlockNumber: big.NewInt(2000),
+			GasUsed:     45000,
+		}, nil)
 
 		resp, err := useCase.Execute(context.Background(), req)
 
@@ -466,7 +565,7 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRepo := new(MockTransactionRepository)
 
 		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, nil, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440034",
@@ -491,9 +590,10 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 	t.Run("execute APPROVE operation successfully", func(t *testing.T) {
 		mockRPC := new(MockRPCClient)
 		mockRepo := new(MockTransactionRepository)
+		mockSigner := new(MockTransactionSigner)
 
 		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, mockSigner, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440036",
@@ -509,6 +609,11 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRepo.On("Save", mock.Anything, mock.AnythingOfType("*entities.EVMTransaction")).Return(nil).Times(2)
 		mockRPC.On("GetNonce", mock.Anything, mock.AnythingOfType("string")).Return(uint64(20), nil)
 		mockRPC.On("GetGasPrice", mock.Anything).Return(big.NewInt(25000000000), nil)
+		mockSigner.On("SignAndSendTransaction", mock.Anything, mock.Anything, mock.Anything).Return("0x999888777666", nil)
+		mockSigner.On("WaitForConfirmations", mock.Anything, "0x999888777666", 12).Return(&types.Receipt{
+			BlockNumber: big.NewInt(3000),
+			GasUsed:     35000,
+		}, nil)
 
 		resp, err := useCase.Execute(context.Background(), req)
 
@@ -523,7 +628,7 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRepo := new(MockTransactionRepository)
 
 		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, nil, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440038",
@@ -546,7 +651,7 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRepo := new(MockTransactionRepository)
 
 		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, nil, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440040",
@@ -569,7 +674,7 @@ func TestExecuteEVMTransactionUseCase_Execute(t *testing.T) {
 		mockRepo := new(MockTransactionRepository)
 
 		rpcClients := map[string]rpc.RPCClient{"ETHEREUM": mockRPC}
-		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, logger)
+		useCase := NewExecuteEVMTransactionUseCase(rpcClients, mockRepo, nil, logger)
 
 		req := &dtos.ExecuteTransactionRequest{
 			OperationID:    "550e8400-e29b-41d4-a716-446655440042",

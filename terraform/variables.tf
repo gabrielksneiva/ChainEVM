@@ -9,7 +9,7 @@ variable "aws_region" {
 variable "lambda_function_name" {
   description = "Lambda function name"
   type        = string
-  default     = "chainevm-dev"
+  default     = "chainevm"
 }
 
 variable "lambda_runtime" {

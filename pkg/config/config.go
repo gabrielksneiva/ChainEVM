@@ -12,7 +12,8 @@ type Config struct {
 	AWSRegion   string
 
 	// AWS SQS
-	SQSQueueURL string
+	SQSQueueURL    string
+	SQSQueueDLQURL string
 
 	// AWS DynamoDB
 	DynamoDBTableName string
@@ -47,6 +48,7 @@ func LoadConfig() *Config {
 		Environment:           getEnv("ENVIRONMENT", "development"),
 		AWSRegion:             getEnv("AWS_REGION", "us-east-1"),
 		SQSQueueURL:           getEnv("SQS_QUEUE_URL", ""),
+		SQSQueueDLQURL:        getEnv("SQS_QUEUE_DLQ_URL", ""),
 		DynamoDBTableName:     getEnv("DYNAMODB_TABLE_NAME", "evm-transactions"),
 		EVMRPCURLs:            evmRPCURLs,
 		RequestTimeout:        time.Duration(requestTimeout) * time.Second,

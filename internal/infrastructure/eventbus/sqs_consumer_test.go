@@ -42,6 +42,22 @@ func (m *MockSQSClient) ChangeMessageVisibility(ctx context.Context, params *sqs
 	return args.Get(0).(*sqs.ChangeMessageVisibilityOutput), args.Error(1)
 }
 
+func (m *MockSQSClient) SendMessage(ctx context.Context, params *sqs.SendMessageInput, optFns ...func(*sqs.Options)) (*sqs.SendMessageOutput, error) {
+	args := m.Called(ctx, params)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*sqs.SendMessageOutput), args.Error(1)
+}
+
+func (m *MockSQSClient) GetQueueAttributes(ctx context.Context, params *sqs.GetQueueAttributesInput, optFns ...func(*sqs.Options)) (*sqs.GetQueueAttributesOutput, error) {
+	args := m.Called(ctx, params)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*sqs.GetQueueAttributesOutput), args.Error(1)
+}
+
 func stringPtr(s string) *string {
 	return &s
 }
