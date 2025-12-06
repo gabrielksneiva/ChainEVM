@@ -7,18 +7,16 @@ terraform {
 
 locals {
   github_repo = "gabrielksneiva/ChainEVM"
+  github_oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
 }
 
 
-# Reference to existing GitHub OIDC Provider
+# Reference to existing GitHub OIDC Provider (constructed ARN avoids ListOpenIDConnectProviders)
 # If not present, create with AWS CLI:
 # aws iam create-open-id-connect-provider \
 #   --url https://token.actions.githubusercontent.com \
 #   --client-id-list sts.amazonaws.com \
 #   --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
-data "aws_iam_openid_connect_provider" "github" {
-  url = "https://token.actions.githubusercontent.com"
-}
 
 # 2. IAM Role for GitHub Actions - Terraform Operations
 resource "aws_iam_role" "github_actions_terraform" {
@@ -30,7 +28,7 @@ resource "aws_iam_role" "github_actions_terraform" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = data.aws_iam_openid_connect_provider.github.arn
+          Federated = local.github_oidc_provider_arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
@@ -147,7 +145,7 @@ resource "aws_iam_role" "github_actions_deploy" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = data.aws_iam_openid_connect_provider.github.arn
+          Federated = local.github_oidc_provider_arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
@@ -201,7 +199,7 @@ resource "aws_iam_role" "github_actions_e2e" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = data.aws_iam_openid_connect_provider.github.arn
+          Federated = local.github_oidc_provider_arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
