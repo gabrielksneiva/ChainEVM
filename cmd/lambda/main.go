@@ -28,6 +28,8 @@ var (
 	log            *zap.Logger
 	executeUseCase *usecases.ExecuteEVMTransactionUseCase
 	sqsConsumer    *eventbus.SQSConsumer
+	dlqHandler     *eventbus.DLQHandler
+	retryManager   *eventbus.RetryManager
 )
 
 func init() {
@@ -52,6 +54,12 @@ func init() {
 	sqsClient := sqs.NewFromConfig(awsCfg)
 	sqsAdapter := eventbus.NewSQSAdapter(sqsClient)
 	sqsConsumer = eventbus.NewSQSConsumer(sqsAdapter, cfg.SQSQueueURL, log)
+
+	// Initialize DLQ Handler for failed messages
+	dlqHandler = eventbus.NewDLQHandler(sqsAdapter, cfg.SQSQueueDLQURL, log)
+
+	// Initialize Retry Manager with exponential backoff
+	retryManager = eventbus.NewRetryManager(dlqHandler, 3, log)
 
 	// Initialize DynamoDB client
 	dynamoDBClient := dynamodb.NewFromConfig(awsCfg)
@@ -111,6 +119,7 @@ func init() {
 	log.Info("Lambda function initialized successfully",
 		zap.String("environment", cfg.Environment),
 		zap.String("sqs_queue_url", cfg.SQSQueueURL),
+		zap.String("sqs_dlq_url", cfg.SQSQueueDLQURL),
 		zap.String("dynamodb_table", cfg.DynamoDBTableName),
 		zap.Int("rpc_clients_initialized", len(rpcClients)),
 	)
@@ -137,7 +146,7 @@ func handler(ctx context.Context, event events.SQSEvent) error {
 	return nil
 }
 
-// processMessage processa uma única mensagem
+// processMessage processa uma única mensagem com retry automático
 func processMessage(ctx context.Context, record events.SQSMessage) error {
 	log.Info("processing SQS message",
 		zap.String("message_id", record.MessageId),
@@ -161,20 +170,29 @@ func processMessage(ctx context.Context, record events.SQSMessage) error {
 		IdempotencyKey: msgBody.IdempotencyKey,
 	}
 
-	// Executar transação
-	response, err := executeUseCase.Execute(ctx, req)
+	// Executar transação com retry automático
+	err := retryManager.ProcessWithRetry(ctx, &msgBody, func(ctx context.Context) error {
+		response, err := executeUseCase.Execute(ctx, req)
+		if err != nil {
+			return err
+		}
+
+		log.Info("transaction executed successfully",
+			zap.String("operation_id", response.OperationID),
+			zap.String("status", response.Status))
+
+		return nil
+	})
+
 	if err != nil {
-		log.Error("failed to execute transaction",
+		log.Error("transaction processing failed (sent to DLQ)",
 			zap.String("operation_id", req.OperationID),
 			zap.Error(err))
-		return err
+		// Erro já foi tratado pelo RetryManager (mensagem enviada para DLQ)
+		// Agora deletar da fila principal
 	}
 
-	log.Info("transaction executed successfully",
-		zap.String("operation_id", response.OperationID),
-		zap.String("status", response.Status))
-
-	// Deletar mensagem da fila após processamento bem-sucedido
+	// Deletar mensagem da fila após processamento (bem-sucedido ou falha)
 	receiptHandle := record.ReceiptHandle
 	if err := sqsConsumer.DeleteMessage(ctx, &receiptHandle); err != nil {
 		log.Error("failed to delete message from SQS",
