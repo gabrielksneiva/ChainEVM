@@ -9,10 +9,6 @@ locals {
   evm_dlq_url   = "https://sqs.${local.aws_region}.amazonaws.com/${local.aws_account_id}/${var.sqs_dlq_name}"
 }
 
-# Data sources para obter informações da conta e região
-data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
-
 # CloudWatch Alarm for queue depth
 resource "aws_cloudwatch_metric_alarm" "sqs_queue_depth" {
   alarm_name          = "${var.sqs_queue_name}-depth-high"

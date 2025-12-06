@@ -5,6 +5,10 @@ terraform {
   required_version = ">= 1.0"
 }
 
+# Data sources para obter informações da conta e região
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 locals {
   github_repo = "gabrielksneiva/ChainEVM"
   github_oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
@@ -107,17 +111,22 @@ resource "aws_iam_role_policy" "github_actions_terraform_policy" {
           "iam:CreateRole",
           "iam:DeleteRole",
           "iam:GetRole",
+          "iam:GetRolePolicy",
           "iam:PassRole",
           "iam:AttachRolePolicy",
           "iam:DetachRolePolicy",
           "iam:PutRolePolicy",
           "iam:DeleteRolePolicy",
+          "iam:ListRolePolicies",
           "iam:TagRole",
           "iam:UntagRole",
           "iam:ListOpenIDConnectProviders",
           "iam:GetOpenIDConnectProvider"
         ]
-        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/*"
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/*",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/*"
+        ]
       },
       {
         Sid    = "CloudWatchLogsManagement"
